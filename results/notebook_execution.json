@@ -1,0 +1,15 @@
+{
+  "status": "passed",
+  "run_id": "0e6d5e8eb2024fe4a444d92266bca2e1",
+  "started_utc": "2026-10-08T19:41:13+00:00",
+  "source_sha256": "7693ed89dcb06826e9af1c1a86aea2bf80673d1e00384e193682e4e1fe292254",
+  "finished_utc": "2026-10-08T19:41:28+00:00",
+  "notebook_sha256": "c3efb0ac96d81a7750a745e63b03bdeac0af3f19e0e826678374e6942def200c",
+  "code_cells": 12,
+  "error_outputs": 0,
+  "png_figures": 9,
+  "pdf_figures": 9,
+  "wall_time_s": 15.425273374654353,
+  "python": "3.14.3 (v3.14.3:323c59a5e34, Feb  3 2026, 11:41:37) [Clang 16.0.0 (clang-1600.0.26.6)]",
+  "executable": "/Users/xuhan/Documents/AO-Fed-IFU-Spectrograph-Simulation/Astrophotonics/.venv/bin/python"
+}

@@ -1,0 +1,9 @@
+{
+  "status": "passed",
+  "wheel": "aophoton-0.1.0-py3-none-any.whl",
+  "sha256": "fe4cce9ba69cb316290464ef18c42c63fb2d19d97e1655303592dc2719088699",
+  "imported_from_separate_install": true,
+  "cli_outside_checkout": "passed",
+  "noiseless_rv_error_m_s": 1.6272902030323166e-06,
+  "dependency_check": "Existing validated environment supplies dependencies; wheel installed with --no-deps"
+}

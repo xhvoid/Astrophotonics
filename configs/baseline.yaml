@@ -1,0 +1,46 @@
+# Independent conceptual study. Full provenance is exported by the CLI.
+# Only diameter, resolving power, and sampling are sourced design values:
+# https://www.eso.org/sci/facilities/develop/instruments/NIRPS.html
+# All other optical/detector settings are assumed; seeds/sampling and RV illustrative.
+seed: 2026
+telescope:
+  diameter_m: 3.6
+  obscuration: 0.25          # diameter ratio, assumed
+  spider_width_m: 0.0       # optional orthogonal bars, assumed
+  n_pix: 128
+  pad_factor: 4
+ao:
+  wavelength_um: 1.555
+  seeing_arcsec: 0.8        # at 500 nm, zenith
+  reference_seeing_arcsec: 0.8
+  residual_wfe_nm: 150.0    # piston/tip/tilt removed RMS at reference seeing
+  outer_scale_m: 25.0
+  tip_tilt_rms_mas: 10.0    # RMS PER AXIS, independent Gaussian offsets
+  n_frames: 12              # independent screens; no physical cadence
+  wavelength_nodes: 3      # interpolate mean modal power over this small band
+fibre:
+  mode_radius_mas: 57.0     # 1/e FIELD radius; equivalent angular MFD = 114 mas
+  few_mode_count: 6         # spatial modes, scalar polarization model
+  lantern_ports: 6
+  lantern_transmission: 0.9 # assumed total transition transmission
+  feed: smf                # smf | few_mode | lantern
+spectrograph:
+  wavelength_min_um: 1.54
+  wavelength_max_um: 1.57
+  resolving_power: 100000.0
+  pixels_per_resolution_element: 3.0
+  oversample: 4
+  throughput: 0.15         # optics + QE, excludes coupling and collecting area
+  rv_padding_m_s: 30000.0
+detector:
+  exposure_s: 300.0
+  continuum_photons_s_m2_um: 20000000.0 # illustrative brightness, no magnitude conversion
+  read_noise_e: 5.0
+  dark_current_e_s: 0.01
+  background_e_s_pixel: 0.05
+  extraction_pixels: 4    # per spectral bin PER independently read channel
+observation:
+  injected_rv_m_s: 2300.0
+  rv_search_half_width_m_s: 10000.0
+  template_path: null     # optional ASCII/FITS; relative to this YAML
+  template_seed: 7

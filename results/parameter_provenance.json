@@ -1,0 +1,254 @@
+[
+  {
+    "parameter": "seed",
+    "value": 2026,
+    "status": "illustrative",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "telescope.diameter_m",
+    "value": 3.6,
+    "status": "sourced",
+    "source": "https://www.eso.org/sci/facilities/develop/instruments/NIRPS.html",
+    "note": "Source-inspired design value; not a claim of current instrument performance"
+  },
+  {
+    "parameter": "telescope.obscuration",
+    "value": 0.25,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "telescope.spider_width_m",
+    "value": 0.0,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "telescope.n_pix",
+    "value": 128,
+    "status": "illustrative",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "telescope.pad_factor",
+    "value": 4,
+    "status": "illustrative",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "ao.wavelength_um",
+    "value": 1.555,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "ao.seeing_arcsec",
+    "value": 0.8,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "ao.reference_seeing_arcsec",
+    "value": 0.8,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "ao.residual_wfe_nm",
+    "value": 150.0,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "ao.outer_scale_m",
+    "value": 25.0,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "ao.tip_tilt_rms_mas",
+    "value": 10.0,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "ao.n_frames",
+    "value": 12,
+    "status": "illustrative",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "ao.wavelength_nodes",
+    "value": 3,
+    "status": "illustrative",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "fibre.mode_radius_mas",
+    "value": 57.0,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "fibre.few_mode_count",
+    "value": 6,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "fibre.lantern_ports",
+    "value": 6,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "fibre.lantern_transmission",
+    "value": 0.9,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "fibre.feed",
+    "value": "smf",
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "spectrograph.wavelength_min_um",
+    "value": 1.54,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "spectrograph.wavelength_max_um",
+    "value": 1.57,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "spectrograph.resolving_power",
+    "value": 100000.0,
+    "status": "sourced",
+    "source": "https://www.eso.org/sci/facilities/develop/instruments/NIRPS.html",
+    "note": "Source-inspired design value; not a claim of current instrument performance"
+  },
+  {
+    "parameter": "spectrograph.pixels_per_resolution_element",
+    "value": 3.0,
+    "status": "sourced",
+    "source": "https://www.eso.org/sci/facilities/develop/instruments/NIRPS.html",
+    "note": "Source-inspired design value; not a claim of current instrument performance"
+  },
+  {
+    "parameter": "spectrograph.oversample",
+    "value": 4,
+    "status": "illustrative",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "spectrograph.throughput",
+    "value": 0.15,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "spectrograph.rv_padding_m_s",
+    "value": 30000.0,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "detector.exposure_s",
+    "value": 300.0,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "detector.continuum_photons_s_m2_um",
+    "value": 20000000.0,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "detector.read_noise_e",
+    "value": 5.0,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "detector.dark_current_e_s",
+    "value": 0.01,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "detector.background_e_s_pixel",
+    "value": 0.05,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "detector.extraction_pixels",
+    "value": 4,
+    "status": "assumed",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "observation.injected_rv_m_s",
+    "value": 2300.0,
+    "status": "illustrative",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "observation.rv_search_half_width_m_s",
+    "value": 10000.0,
+    "status": "illustrative",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "observation.template_path",
+    "value": null,
+    "status": "illustrative",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  },
+  {
+    "parameter": "observation.template_seed",
+    "value": 7,
+    "status": "illustrative",
+    "source": "User-selected conceptual model; no instrument calibration",
+    "note": "No fitted instrument parameters"
+  }
+]

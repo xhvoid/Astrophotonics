@@ -1,0 +1,242 @@
+[
+  {
+    "brightness_scale": 1.0,
+    "wfe_nm": 0.0,
+    "ports": 1,
+    "coupling": 0.6648419506407971,
+    "median_snr": 171.3803041457365,
+    "rv_sigma_m_s": 3.460520580592296
+  },
+  {
+    "brightness_scale": 1.0,
+    "wfe_nm": 0.0,
+    "ports": 3,
+    "coupling": 0.6258215398338322,
+    "median_snr": 165.23239277425643,
+    "rv_sigma_m_s": 3.596363759525563
+  },
+  {
+    "brightness_scale": 1.0,
+    "wfe_nm": 0.0,
+    "ports": 6,
+    "coupling": 0.6302822472267537,
+    "median_snr": 164.35093807248592,
+    "rv_sigma_m_s": 3.6254910278619463
+  },
+  {
+    "brightness_scale": 1.0,
+    "wfe_nm": 0.0,
+    "ports": 10,
+    "coupling": 0.638474695149975,
+    "median_snr": 163.55091576298406,
+    "rv_sigma_m_s": 3.65542816567798
+  },
+  {
+    "brightness_scale": 1.0,
+    "wfe_nm": 0.0,
+    "ports": 15,
+    "coupling": 0.6824279814943425,
+    "median_snr": 167.1704131747614,
+    "rv_sigma_m_s": 3.587874857368664
+  },
+  {
+    "brightness_scale": 1.0,
+    "wfe_nm": 150.0,
+    "ports": 1,
+    "coupling": 0.46573301308418685,
+    "median_snr": 143.26282433909782,
+    "rv_sigma_m_s": 4.141318224334783
+  },
+  {
+    "brightness_scale": 1.0,
+    "wfe_nm": 150.0,
+    "ports": 3,
+    "coupling": 0.44095067922509107,
+    "median_snr": 138.16967021283813,
+    "rv_sigma_m_s": 4.30581156313242
+  },
+  {
+    "brightness_scale": 1.0,
+    "wfe_nm": 150.0,
+    "ports": 6,
+    "coupling": 0.4694369031650246,
+    "median_snr": 140.98245123939077,
+    "rv_sigma_m_s": 4.234051167285611
+  },
+  {
+    "brightness_scale": 1.0,
+    "wfe_nm": 150.0,
+    "ports": 10,
+    "coupling": 0.48290111806881464,
+    "median_snr": 140.94439628975658,
+    "rv_sigma_m_s": 4.252777611503384
+  },
+  {
+    "brightness_scale": 1.0,
+    "wfe_nm": 150.0,
+    "ports": 15,
+    "coupling": 0.536611407600119,
+    "median_snr": 146.68401723971675,
+    "rv_sigma_m_s": 4.100791945067712
+  },
+  {
+    "brightness_scale": 1.0,
+    "wfe_nm": 400.0,
+    "ports": 1,
+    "coupling": 0.0514935789932763,
+    "median_snr": 46.131763640811315,
+    "rv_sigma_m_s": 12.984860725119885
+  },
+  {
+    "brightness_scale": 1.0,
+    "wfe_nm": 400.0,
+    "ports": 3,
+    "coupling": 0.07199068603801183,
+    "median_snr": 52.48403875044023,
+    "rv_sigma_m_s": 11.530815519913366
+  },
+  {
+    "brightness_scale": 1.0,
+    "wfe_nm": 400.0,
+    "ports": 6,
+    "coupling": 0.10317268450149156,
+    "median_snr": 61.17268392942297,
+    "rv_sigma_m_s": 9.956737493806084
+  },
+  {
+    "brightness_scale": 1.0,
+    "wfe_nm": 400.0,
+    "ports": 10,
+    "coupling": 0.118698369368162,
+    "median_snr": 63.06603470770184,
+    "rv_sigma_m_s": 9.741356006722656
+  },
+  {
+    "brightness_scale": 1.0,
+    "wfe_nm": 400.0,
+    "ports": 15,
+    "coupling": 0.15386086953863046,
+    "median_snr": 70.45326910010908,
+    "rv_sigma_m_s": 8.753037095734161
+  },
+  {
+    "brightness_scale": 0.01,
+    "wfe_nm": 0.0,
+    "ports": 1,
+    "coupling": 0.6648419506407971,
+    "median_snr": 13.664331524538834,
+    "rv_sigma_m_s": 45.68789499452161
+  },
+  {
+    "brightness_scale": 0.01,
+    "wfe_nm": 0.0,
+    "ports": 3,
+    "coupling": 0.6258215398338322,
+    "median_snr": 9.868293312933572,
+    "rv_sigma_m_s": 65.42464433476242
+  },
+  {
+    "brightness_scale": 0.01,
+    "wfe_nm": 0.0,
+    "ports": 6,
+    "coupling": 0.6302822472267537,
+    "median_snr": 7.731823287184107,
+    "rv_sigma_m_s": 84.75640058630972
+  },
+  {
+    "brightness_scale": 0.01,
+    "wfe_nm": 0.0,
+    "ports": 10,
+    "coupling": 0.638474695149975,
+    "median_snr": 6.33798659371225,
+    "rv_sigma_m_s": 104.17659105818453
+  },
+  {
+    "brightness_scale": 0.01,
+    "wfe_nm": 0.0,
+    "ports": 15,
+    "coupling": 0.6824279814943425,
+    "median_snr": 5.647305793212004,
+    "rv_sigma_m_s": 117.35545248752229
+  },
+  {
+    "brightness_scale": 0.01,
+    "wfe_nm": 150.0,
+    "ports": 1,
+    "coupling": 0.46573301308418685,
+    "median_snr": 10.630941176661992,
+    "rv_sigma_m_s": 59.35670796784701
+  },
+  {
+    "brightness_scale": 0.01,
+    "wfe_nm": 150.0,
+    "ports": 3,
+    "coupling": 0.44095067922509107,
+    "median_snr": 7.343347763437768,
+    "rv_sigma_m_s": 88.65040115303601
+  },
+  {
+    "brightness_scale": 0.01,
+    "wfe_nm": 150.0,
+    "ports": 6,
+    "coupling": 0.4694369031650246,
+    "median_snr": 5.922253555244378,
+    "rv_sigma_m_s": 111.18279140380676
+  },
+  {
+    "brightness_scale": 0.01,
+    "wfe_nm": 150.0,
+    "ports": 10,
+    "coupling": 0.48290111806881464,
+    "median_snr": 4.878539555500201,
+    "rv_sigma_m_s": 135.76884789701145
+  },
+  {
+    "brightness_scale": 0.01,
+    "wfe_nm": 150.0,
+    "ports": 15,
+    "coupling": 0.536611407600119,
+    "median_snr": 4.491380883219913,
+    "rv_sigma_m_s": 147.86733084541413
+  },
+  {
+    "brightness_scale": 0.01,
+    "wfe_nm": 400.0,
+    "ports": 1,
+    "coupling": 0.0514935789932763,
+    "median_snr": 1.6390521844921484,
+    "rv_sigma_m_s": 403.8394211181318
+  },
+  {
+    "brightness_scale": 0.01,
+    "wfe_nm": 400.0,
+    "ports": 3,
+    "coupling": 0.07199068603801183,
+    "median_snr": 1.3665168612519296,
+    "rv_sigma_m_s": 487.2867795491656
+  },
+  {
+    "brightness_scale": 0.01,
+    "wfe_nm": 400.0,
+    "ports": 6,
+    "coupling": 0.10317268450149156,
+    "median_snr": 1.3964045063549402,
+    "rv_sigma_m_s": 477.61336433433024
+  },
+  {
+    "brightness_scale": 0.01,
+    "wfe_nm": 400.0,
+    "ports": 10,
+    "coupling": 0.118698369368162,
+    "median_snr": 1.2526980641651912,
+    "rv_sigma_m_s": 533.0816463034187
+  },
+  {
+    "brightness_scale": 0.01,
+    "wfe_nm": 400.0,
+    "ports": 15,
+    "coupling": 0.15386086953863046,
+    "median_snr": 1.3285063305238625,
+    "rv_sigma_m_s": 502.85896841298376
+  }
+]

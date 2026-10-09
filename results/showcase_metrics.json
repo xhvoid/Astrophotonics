@@ -1,0 +1,84 @@
+{
+  "baseline": {
+    "disclaimer": "This is an independent conceptual study and is not an official ESO instrument model.",
+    "seed": 2026,
+    "feed": "smf",
+    "residual_wfe_nm": 150.00000000000003,
+    "measured_strehl": 0.6597629205129092,
+    "marechal_without_jitter": 0.6925663699482779,
+    "mean_smf_coupling": 0.47114140324229564,
+    "mean_few_mode_coupling": 0.5302561591641237,
+    "mean_lantern_coupling": 0.47723054324771136,
+    "mean_selected_coupling": 0.47114978961268245,
+    "collecting_area_m2": 9.536484375,
+    "median_snr_per_pixel": 144.06412037925725,
+    "injected_rv_m_s": 2300.0,
+    "recovered_rv_m_s": 2296.374196331586,
+    "recovery_bias_m_s": -3.625803668413937,
+    "estimated_rv_uncertainty_m_s": 4.115534338736836,
+    "rv_at_search_boundary": false,
+    "rv_reduced_chi2": 0.9622294688396336,
+    "validation": "Synthetic only; no OOPAO or observational validation"
+  },
+  "conclusions": [
+    "At zero jitter, increasing residual WFE from 0 to 500 nm changes mean SMF coupling from 0.699 to 0.020; wavefront quality sets the photon budget.",
+    "At 150 nm WFE, increasing per-axis jitter from 0 to 40 mas changes SMF coupling from 0.489 to 0.249; injection stability remains important even at fixed AO residual.",
+    "At 400 nm WFE / 10 mas jitter, replacing the SMF with a 15-port lantern changes forecast \u03c3RV from 12.98 to 8.75 m/s at baseline brightness, but from 403.84 to 502.86 m/s at 1/100 brightness. Under the assumed insertion loss and extraction noise, detector costs can reverse the throughput advantage."
+  ],
+  "strehl_cases": [
+    [
+      0,
+      1.0,
+      1.0
+    ],
+    [
+      150,
+      0.694722043243424,
+      0.692566369948278
+    ],
+    [
+      400,
+      0.21350132754858947,
+      0.07336742583932372
+    ]
+  ],
+  "sweep_frames": 12,
+  "maximum_coupling_sem": 0.063605180638723,
+  "wavelength_um": [
+    1.2,
+    1.275,
+    1.35,
+    1.425,
+    1.5,
+    1.575,
+    1.65,
+    1.725,
+    1.8
+  ],
+  "wavelength_coupling": [
+    0.3602876828077044,
+    0.39960603752628887,
+    0.43232580586530817,
+    0.45839008769141937,
+    0.4781249777312795,
+    0.4920869145377178,
+    0.5009467039490657,
+    0.50540857668248,
+    0.5061580180836561
+  ],
+  "seeing_arcsec": [
+    0.5,
+    0.65,
+    0.8,
+    1.0,
+    1.2
+  ],
+  "seeing_coupling": [
+    0.5936752452911154,
+    0.5428533261295133,
+    0.4888914371324058,
+    0.4159246783858889,
+    0.34559371837211605
+  ],
+  "notebook_runtime_s": 14.21792112570256
+}

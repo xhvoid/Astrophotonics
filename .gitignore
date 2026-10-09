@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+.mplconfig/
+build/
+dist/
+data/
+results/baseline/
+
+.ipython/
+.jupyter_runtime/
