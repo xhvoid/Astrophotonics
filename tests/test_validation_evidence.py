@@ -247,3 +247,79 @@ def test_complete_run_publishes_exactly_its_own_products(project, monkeypatch):
     assert all((project / r).read_text().startswith("new") for r in evidence.REQUIRED_PRODUCTS)
     record = evidence.verified_record(project)
     assert record["status"] == "passed" and set(record["products_sha256"]) == set(evidence.REQUIRED_PRODUCTS)
+
+
+def test_staging_keeps_relative_templates_outside_data_working(tmp_path):
+    # observation.template_path is relative to its YAML; a template outside data/
+    # must still load when the notebook runs from the staging directory.
+    import numpy as np
+
+    from aophoton.config import load_config
+    from aophoton.spectrum import load_spectrum, synthetic_spectrum
+
+    execute = _load("execute_showcase")
+    evidence = _load("evidence")
+    root = tmp_path / "project"
+    (root / "configs").mkdir(parents=True)
+    (root / "templates").mkdir()
+    spectrum = synthetic_spectrum()
+    np.savetxt(root / "templates/template.csv",
+               np.column_stack((spectrum.wavelength_um, spectrum.relative_flux)), delimiter=",")
+    (root / "configs/baseline.yaml").write_text("observation:\n  template_path: ../templates/template.csv\n")
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    execute._stage_inputs(root, stage)
+    staged = load_config(stage / "configs/baseline.yaml")
+    assert Path(staged.observation.template_path) == (root / "templates/template.csv").resolve()
+    load_spectrum(staged.observation.template_path)
+    assert not (stage / "results").exists() and not (stage / "figures").exists()   # outputs stay fresh
+    # The referenced template is a run input: editing it invalidates the evidence.
+    before = evidence.inputs_digest(root)
+    (root / "templates/template.csv").write_text((root / "templates/template.csv").read_text() + "\n")
+    assert evidence.inputs_digest(root) != before
+
+
+def test_failed_publication_restores_the_previous_products_exactly(project, monkeypatch):
+    # A write failure after several products were already replaced (and with a
+    # stale extra pending removal) must leave the previous published set intact.
+    import os
+
+    execute = _load("execute_showcase")
+    evidence = _load("evidence")
+    (project / "figures/retired_plot.png").write_text("stale product of an earlier notebook\n")
+    before = evidence.product_digests(project)
+    calls, real_replace = [], os.replace
+
+    def flaky_replace(source, target):
+        calls.append(target)
+        if len(calls) == 6:
+            raise OSError("simulated write failure")
+        return real_replace(source, target)
+
+    monkeypatch.setattr(execute, "NotebookClient", _staging_client(lambda stage: _write_products(stage, tag="new")))
+    monkeypatch.setattr(execute, "KernelManager", _NoKernel)
+    monkeypatch.setattr(execute, "_kernel_import_path", lambda kernel: str(project / "src/aophoton/__init__.py"))
+    monkeypatch.setattr(execute.os, "replace", flaky_replace)
+    with pytest.raises(OSError, match="simulated write failure"):
+        execute.main(project)
+    assert len(calls) > 6                                    # some files were replaced, then restored
+    assert evidence.product_digests(project) == before
+    assert json.loads((project / "results/notebook_execution.json").read_text())["status"] == "failed"
+    assert not list(project.glob(".publish-backup-*")) and not list(project.rglob("*.publish-tmp"))
+
+
+def test_read_only_destination_is_refused_before_anything_changes(project, monkeypatch):
+    execute = _load("execute_showcase")
+    evidence = _load("evidence")
+    before = evidence.product_digests(project)
+    locked = project / "results/showcase_metrics.json"
+    locked.chmod(0o444)
+    try:
+        monkeypatch.setattr(execute, "NotebookClient", _staging_client(lambda stage: _write_products(stage, tag="new")))
+        monkeypatch.setattr(execute, "KernelManager", _NoKernel)
+        monkeypatch.setattr(execute, "_kernel_import_path", lambda kernel: str(project / "src/aophoton/__init__.py"))
+        with pytest.raises(PermissionError, match="nothing was changed"):
+            execute.main(project)
+        assert evidence.product_digests(project) == before
+    finally:
+        locked.chmod(0o644)

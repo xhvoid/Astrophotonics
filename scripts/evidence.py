@@ -71,10 +71,30 @@ def tests_digest(root: Path) -> str:
     return _tree_digest(root, [*(root / "tests").rglob("*.py"), *(root / "scripts").glob("*.py")])
 
 
+def _referenced_templates(config_file: Path) -> list[Path]:
+    """Template files a configuration names (``observation.template_path``),
+    resolved the way the configuration loader resolves them: relative to the YAML."""
+    import yaml
+
+    try:
+        raw = yaml.safe_load(config_file.read_text())
+    except (OSError, yaml.YAMLError):
+        return []
+    observation = raw.get("observation") if isinstance(raw, dict) else None
+    template = observation.get("template_path") if isinstance(observation, dict) else None
+    return [(config_file.resolve().parent / template).resolve()] if isinstance(template, str) else []
+
+
 def inputs_digest(root: Path) -> str:
-    """SHA-256 over the configuration inputs (``configs/``) the runs read."""
+    """SHA-256 over the configuration inputs the runs read: every file in
+    ``configs/`` and every template file those configurations reference."""
     root = Path(root)
-    return _tree_digest(root, [p for p in (root / "configs").rglob("*") if p.is_file()])
+    configs = sorted(p for p in (root / "configs").rglob("*") if p.is_file())
+    digest = hashlib.sha256(_tree_digest(root, configs).encode())
+    for template in sorted({t for c in configs if c.suffix in {".yaml", ".yml"} for t in _referenced_templates(c)}):
+        digest.update(import_location(root, template).encode() + b"\0")
+        digest.update((template.read_bytes() if template.is_file() else b"<missing>") + b"\0")
+    return digest.hexdigest()
 
 
 def product_digests(root: Path) -> dict[str, str]:

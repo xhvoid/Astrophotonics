@@ -52,29 +52,83 @@ def _stage_inputs(root: Path, stage: Path) -> None:
 
     The notebook resolves its project root from the kernel's working directory,
     so its results/ and figures/ start empty here: every product found after the
-    run was written by this run.  ``data/`` is linked when present so template
-    paths given relative to a configuration still resolve.
+    run was written by this run.  ``configs/`` is LINKED, not copied: the
+    configuration loader resolves the link, so template paths given relative to
+    a YAML file resolve against its real location, wherever they point.
     """
-    shutil.copytree(root / "configs", stage / "configs")
-    if (root / "data").is_dir():
-        (stage / "data").symlink_to((root / "data").resolve(), target_is_directory=True)
+    (stage / "configs").symlink_to((root / "configs").resolve(), target_is_directory=True)
+
+
+def _writable_location(path: Path) -> bool:
+    """Whether ``path`` can be replaced or removed (or created in its nearest existing ancestor)."""
+    if path.exists() and not os.access(path, os.W_OK):
+        return False
+    parent = path.parent
+    while not parent.exists():
+        parent = parent.parent
+    return os.access(parent, os.W_OK)
+
+
+def _replace_file(source: Path, target: Path) -> None:
+    """Atomically put a copy of ``source`` at ``target`` (temporary file + rename)."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f".{target.name}.publish-tmp")
+    try:
+        shutil.copy2(source, temporary)
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _restore(root: Path, backup: Path, previous: dict[str, str]) -> None:
+    """Return the published products to exactly ``previous`` (from ``backup``)."""
+    for relative in sorted(set(product_digests(root)) - set(previous)):
+        (root / relative).unlink()
+    for relative, digest in previous.items():
+        target = root / relative
+        if not target.exists() or file_digest(target) != digest:
+            _replace_file(backup / relative, target)
+    if product_digests(root) != previous:
+        raise RuntimeError(f"Rollback incomplete; the previous products are preserved in {backup}.")
 
 
 def _publish(stage: Path, root: Path, produced: dict[str, str]) -> None:
-    """Make the project's product set exactly the staged one.
+    """Make the project's product set exactly the staged one, all or nothing.
 
-    Produced files replace their published copies, and files matching the
-    product patterns that this run did not produce are removed (they are stale
-    outputs of an earlier run), so nothing uncertified remains published.
+    A destination that cannot be written is refused before anything changes.
+    The previously published set is backed up; produced files then replace their
+    published copies one atomic rename at a time, and only once all of them are
+    in place are stale products of earlier runs removed.  Any failure restores
+    the previous set exactly (verified by digest) before the error propagates,
+    so a failed publication never leaves old and new products mixed.
     """
-    for relative in sorted(set(product_digests(root)) - set(produced)):
-        (root / relative).unlink()
-    for relative in produced:
-        target = root / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(stage / relative, target)
-    if product_digests(root) != produced:
-        raise RuntimeError("Published products differ from the staged run.")
+    previous = product_digests(root)
+    stale = sorted(set(previous) - set(produced))
+    blocked = [relative for relative in sorted(set(produced) | set(stale))
+               if not _writable_location(root / relative)]
+    if blocked:
+        raise PermissionError(f"Cannot publish: destinations are not writable {blocked}; nothing was changed.")
+    backup = Path(tempfile.mkdtemp(prefix=".publish-backup-", dir=root))
+    restored = True
+    try:
+        for relative in previous:
+            (backup / relative).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(root / relative, backup / relative)
+        try:
+            for relative in produced:
+                _replace_file(stage / relative, root / relative)
+            for relative in stale:
+                (root / relative).unlink()
+            if product_digests(root) != produced:
+                raise RuntimeError("Published products differ from the staged run.")
+        except BaseException:
+            restored = False
+            _restore(root, backup, previous)
+            restored = True
+            raise
+    finally:
+        if restored:
+            shutil.rmtree(backup, ignore_errors=True)
 
 
 def main(root: Path | None = None) -> None:
