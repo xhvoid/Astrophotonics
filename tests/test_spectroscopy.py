@@ -279,3 +279,21 @@ def test_correlation_scale_is_not_taken_from_a_featureless_midpoint():
     result = recover_rv(edge_lines, edge_lines(5123.4), variance, search_min_m_s=-100_000, search_max_m_s=700_000)
     assert abs(result.rv_m_s - 5123.4) < 0.01
     assert result.reduced_chi2 < 1e-8
+
+
+def test_line_entering_a_narrow_band_between_fixed_probes_is_found():
+    # A 9-pixel band (~5.8 km/s wide) searched over +/-400 km/s: the only line
+    # is in band for a few km/s of RV, between nine evenly spaced probes. Probes
+    # spaced by half the band's velocity width must still see it.
+    from aophoton.spectrum import doppler_factor
+
+    injected = 55_123.4
+    wavelength = np.geomspace(1.549, 1.561, 200_000)
+    rest_centre = 1.555015 / doppler_factor(injected)
+    flux = 1 - 0.65 * np.exp(-0.5 * (C_M_S * np.log(wavelength / rest_centre) / 100) ** 2)
+    narrow = SpectrographModel(Spectrum(wavelength, flux), SpectrographConfig(
+        wavelength_min_um=1.555, wavelength_max_um=1.55503, resolving_power=150_000, rv_padding_m_s=900_000))
+    variance = np.full(narrow.wavelength_um.size, 1e-4)
+    result = recover_rv(narrow, narrow(injected), variance, search_min_m_s=-400_000, search_max_m_s=400_000)
+    assert abs(result.rv_m_s - injected) < 0.01
+    assert result.reduced_chi2 < 1e-8

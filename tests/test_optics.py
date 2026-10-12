@@ -214,3 +214,44 @@ def test_unresolved_or_truncated_fibre_mode_is_rejected():
     fine = propagate(pupil, np.zeros_like(pupil.amplitude), 1.555, 16)
     assert overlap_efficiency(focal.field, gaussian_mode(focal, 57.0)) == pytest.approx(
         overlap_efficiency(fine.field, gaussian_mode(fine, 57.0)), rel=1e-3)
+
+
+def test_higher_order_modes_require_finer_sampling():
+    # A complete degree-8 shell (45 modes, 29 mas) at padding 4 has 1.30 px per
+    # radius: accepted before, it overestimated displaced-field acceptance by 62%.
+    # It is now rejected; padding 8 (2.60 px) is accepted and converged.
+    from aophoton.coupling import required_pixels_per_radius
+    from aophoton.lantern import modal_coupling, mode_basis
+    from aophoton.propagation import propagate
+    from aophoton.pupil import make_pupil
+
+    pupil = make_pupil(32)
+    zero = np.zeros_like(pupil.amplitude)
+    with pytest.raises(ValueError, match="degree 8"):
+        mode_basis(propagate(pupil, zero, 1.555, 4, (150, 0)), 29, 45)
+    accepted = [float(modal_coupling(focal.field, mode_basis(focal, 29, 45)).sum())
+                for focal in (propagate(pupil, zero, 1.555, pad, (150, 0)) for pad in (8, 16))]
+    assert accepted[0] == pytest.approx(accepted[1], rel=1e-4)
+    assert required_pixels_per_radius(0) < required_pixels_per_radius(2) < required_pixels_per_radius(8)
+
+
+@pytest.mark.parametrize("degree", [0, 2, 4, 8])
+def test_minimum_accepted_sampling_is_converged_for_displaced_fields(degree):
+    # At the smallest padding the guard accepts, modal acceptance of displaced
+    # and aberrated fields agrees with a padding-16 reference to < 0.1%.
+    from aophoton.coupling import required_pixels_per_radius
+    from aophoton.lantern import modal_coupling, mode_basis
+    from aophoton.propagation import propagate
+    from aophoton.pupil import make_pupil
+
+    pupil = make_pupil(32)
+    n_modes = (degree + 1) * (degree + 2) // 2
+    pixel_pad2 = propagate(pupil, np.zeros_like(pupil.amplitude), 1.555, 2).pixel_scale_mas
+    radius = required_pixels_per_radius(degree) * pixel_pad2 * 1.0001       # just accepted at padding 2
+    rng = np.random.default_rng(degree)
+    for opd in (np.zeros_like(pupil.amplitude), make_ao_residual(pupil, 300, rng)):
+        for shift in (0.0, 2.0 * radius):
+            coarse, fine = (propagate(pupil, opd, 1.555, pad, (shift, 0.0)) for pad in (2, 16))
+            a = float(modal_coupling(coarse.field, mode_basis(coarse, radius, n_modes)).sum())
+            b = float(modal_coupling(fine.field, mode_basis(fine, radius, n_modes)).sum())
+            assert abs(a - b) <= 1e-3 * max(b, 1e-3)

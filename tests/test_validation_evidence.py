@@ -1,8 +1,12 @@
-"""Notebook-execution evidence cannot outlive a failed or stale rerun."""
+"""Validation evidence cannot outlive a failed or stale rerun, or vouch for
+inputs, products or code other than those that actually produced it."""
 
 import importlib.util
 import json
 from pathlib import Path
+import shutil
+import subprocess
+import sys
 
 import pytest
 
@@ -21,10 +25,17 @@ def _load(name):
 
 @pytest.fixture
 def project(tmp_path):
-    """A minimal project tree holding a cleanly executed notebook and old evidence."""
+    """A minimal project tree holding a cleanly executed notebook, its inputs,
+    its products, and old evidence."""
     (tmp_path / "src/aophoton").mkdir(parents=True)
+    (tmp_path / "src/aophoton/__init__.py").write_text("")
     (tmp_path / "src/aophoton/core.py").write_text("VALUE = 1\n")
+    (tmp_path / "configs").mkdir()
+    (tmp_path / "configs/baseline.yaml").write_text("ao: {residual_wfe_nm: 150.0}\n")
     (tmp_path / "results").mkdir()
+    (tmp_path / "results/showcase_metrics.json").write_text('{"baseline": {"mean_smf_coupling": 0.4711}}\n')
+    (tmp_path / "figures").mkdir()
+    (tmp_path / "figures/plot.png").write_bytes(b"png")
     (tmp_path / "notebooks").mkdir()
     cell = nbformat.v4.new_code_cell("1 + 1", execution_count=1)
     cell.outputs = [nbformat.v4.new_output("execute_result", {"text/plain": "2"}, execution_count=1)]
@@ -34,6 +45,13 @@ def project(tmp_path):
     return tmp_path
 
 
+def _passing_notebook_record(evidence, project):
+    return dict(status="passed", error_outputs=0,
+                notebook_sha256=evidence.file_digest(project / evidence.NOTEBOOK),
+                source_sha256=evidence.source_digest(project), inputs_sha256=evidence.inputs_digest(project),
+                imported_from=evidence.IMPORT_TARGET, products_sha256=evidence.product_digests(project))
+
+
 def test_failed_rerun_replaces_passing_record_and_blocks_doc_update(project, monkeypatch):
     execute = _load("execute_showcase")
 
@@ -41,7 +59,7 @@ def test_failed_rerun_replaces_passing_record_and_blocks_doc_update(project, mon
         def __init__(self, notebook, **kwargs):
             self.notebook = notebook
 
-        def execute(self):
+        def execute(self, **kwargs):
             self.notebook.cells[0].outputs = [nbformat.v4.new_output(
                 "error", ename="ValueError", evalue="boom", traceback=[])]
             raise RuntimeError("cell failed")
@@ -63,10 +81,7 @@ def test_failed_rerun_replaces_passing_record_and_blocks_doc_update(project, mon
 
 def test_passing_record_is_bound_to_notebook_and_source(project):
     evidence = _load("evidence")
-    notebook = project / evidence.NOTEBOOK
-    evidence.write_record(project, dict(
-        status="passed", error_outputs=0, notebook_sha256=evidence.file_digest(notebook),
-        source_sha256=evidence.source_digest(project)))
+    evidence.write_record(project, _passing_notebook_record(evidence, project))
     assert evidence.verified_record(project)["status"] == "passed"
 
     # The pre-hash record format (as in an older passing run) is not trusted.
@@ -81,6 +96,36 @@ def test_passing_record_is_bound_to_notebook_and_source(project):
         evidence.verified_record(project)
 
 
+@pytest.mark.parametrize("change", ["config", "metrics", "figure", "extra_product"])
+def test_notebook_record_is_bound_to_inputs_and_products(project, change):
+    # A passing record must not vouch for a different baseline configuration or
+    # for result products edited (or added) after the run.
+    evidence = _load("evidence")
+    evidence.write_record(project, _passing_notebook_record(evidence, project))
+    if change == "config":
+        (project / "configs/baseline.yaml").write_text("ao: {residual_wfe_nm: 500.0}\n")
+        match = "Configuration inputs changed"
+    elif change == "metrics":
+        (project / "results/showcase_metrics.json").write_text('{"baseline": {"mean_smf_coupling": 0.9999}}\n')
+        match = "Result products"
+    elif change == "figure":
+        (project / "figures/plot.png").write_bytes(b"other")
+        match = "Result products"
+    else:
+        (project / "figures/new.pdf").write_bytes(b"pdf")
+        match = "Result products"
+    with pytest.raises(RuntimeError, match=match):
+        evidence.verified_record(project)
+
+
+def test_record_from_another_installation_is_rejected(project):
+    evidence = _load("evidence")
+    record = dict(_passing_notebook_record(evidence, project), imported_from="/elsewhere/aophoton/__init__.py")
+    evidence.write_record(project, record)
+    with pytest.raises(RuntimeError, match="imported aophoton from"):
+        evidence.verified_record(project)
+
+
 def test_pytest_evidence_is_bound_to_source_tests_and_junit(project):
     evidence = _load("evidence")
     (project / "tests").mkdir()
@@ -88,6 +133,7 @@ def test_pytest_evidence_is_bound_to_source_tests_and_junit(project):
     junit = project / evidence.JUNIT
     junit.write_text('<testsuites><testsuite tests="1" failures="0" errors="0" skipped="0"/></testsuites>')
     record = dict(status="passed", tests=1, source_sha256=evidence.source_digest(project),
+                  inputs_sha256=evidence.inputs_digest(project), imported_from=evidence.IMPORT_TARGET,
                   tests_sha256=evidence.tests_digest(project), junit_sha256=evidence.file_digest(junit))
     (project / evidence.TEST_RECORD).write_text(json.dumps(record))
     assert evidence.verified_test_record(project)["tests"] == 1
@@ -97,6 +143,11 @@ def test_pytest_evidence_is_bound_to_source_tests_and_junit(project):
     with pytest.raises(RuntimeError, match="Tests or scripts changed"):
         evidence.verified_test_record(project)
     (project / "tests/test_x.py").write_text("def test_x():\n    pass\n")
+    # ... nor for changed configuration inputs ...
+    (project / "configs/baseline.yaml").write_text("ao: {residual_wfe_nm: 500.0}\n")
+    with pytest.raises(RuntimeError, match="Configuration inputs changed"):
+        evidence.verified_test_record(project)
+    (project / "configs/baseline.yaml").write_text("ao: {residual_wfe_nm: 150.0}\n")
     # ... nor can an edited pytest.xml or a failed run.
     junit.write_text('<testsuites><testsuite tests="9" failures="0" errors="0" skipped="0"/></testsuites>')
     with pytest.raises(RuntimeError, match="pytest.xml does not match"):
@@ -104,3 +155,38 @@ def test_pytest_evidence_is_bound_to_source_tests_and_junit(project):
     (project / evidence.TEST_RECORD).write_text(json.dumps(dict(record, status="failed")))
     with pytest.raises(RuntimeError, match="did not pass"):
         evidence.verified_test_record(project)
+
+
+def test_local_import_env_wins_over_a_shadowing_installation(tmp_path):
+    # Another aophoton earlier on PYTHONPATH must not be what a run certifies.
+    evidence = _load("evidence")
+    shadow = tmp_path / "shadow/aophoton"
+    shadow.mkdir(parents=True)
+    (shadow / "__init__.py").write_text("")
+    probe = [sys.executable, "-c", "import aophoton; print(aophoton.__file__)"]
+    shadowed = subprocess.run(probe, env={**evidence.local_import_env(ROOT), "PYTHONPATH": str(tmp_path / "shadow")},
+                              capture_output=True, text=True, check=True, cwd=tmp_path)
+    assert Path(shadowed.stdout.strip()).resolve() == (shadow / "__init__.py").resolve()
+    local = subprocess.run(probe, env=evidence.local_import_env(ROOT, {"PYTHONPATH": str(tmp_path / "shadow")}),
+                           capture_output=True, text=True, check=True, cwd=tmp_path)
+    assert evidence.import_location(ROOT, local.stdout.strip()) == evidence.IMPORT_TARGET
+
+
+@pytest.mark.parametrize("own_package", [True, False])
+def test_run_tests_certifies_only_the_project_it_imported(project, own_package):
+    # End to end on a throwaway project: the pytest session reports the module
+    # it imported (tests/conftest.py) and the record passes only for its own src.
+    (project / "tests").mkdir()
+    shutil.copy(ROOT / "tests/conftest.py", project / "tests/conftest.py")
+    (project / "tests/test_x.py").write_text("def test_x():\n    pass\n")
+    if not own_package:
+        shutil.rmtree(project / "src/aophoton")       # falls through to the installed package
+    run_tests = _load("run_tests")
+    assert run_tests.main(project) == (0 if own_package else 1)
+    record = json.loads((project / "results/pytest_record.json").read_text())
+    evidence = _load("evidence")
+    if own_package:
+        assert record["status"] == "passed" and record["imported_from"] == evidence.IMPORT_TARGET
+        assert evidence.verified_test_record(project)["tests"] == 1
+    else:
+        assert record["status"] == "failed" and record["imported_from"] != evidence.IMPORT_TARGET

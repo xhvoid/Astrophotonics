@@ -52,7 +52,8 @@ def test_cli_noiseless_lantern(tmp_path, capsys):
     config = load_config(ROOT / "configs/baseline.yaml")
     # Smaller ensemble exercises the same CLI/operator without duplicating
     # the full baseline's optical statistics in this command-line test.
-    config = replace(config, telescope=replace(config.telescope,n_pix=48,pad_factor=2),
+    # Padding 3 keeps the six-mode basis converged (degree 2 needs >= 1.79 px per radius).
+    config = replace(config, telescope=replace(config.telescope,n_pix=48,pad_factor=3),
                      ao=replace(config.ao,n_frames=2),
                      fibre=replace(config.fibre,feed="lantern",lantern_ports=3))
     path = tmp_path / "input.yaml"

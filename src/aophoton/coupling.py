@@ -4,34 +4,49 @@ See Shaklan & Roddier (1988), Applied Optics 27, 2334,
 https://doi.org/10.1364/AO.27.002334. No intensity-only overlap is used.
 """
 
+import math
+
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from .propagation import FocalPlane
 
-# A Gaussian field radius below ~1.25 focal-plane pixels is not resolved: a mode
-# narrower than a pixel collapses to a discrete delta and its overlap scales
-# with the pixel size (1 mas at the default grid coupled 79x the continuous
-# value). At >= 1.25 px the ideal coupling is converged to ~0.1% under padding
-# refinement. The grid half-width must also contain several radii so the mode
-# is not truncated.
-MIN_PIXELS_PER_MODE_RADIUS = 1.25
+# Sampling needed for a converged modal overlap. An unresolved mode collapses to
+# a discrete delta whose overlap scales with the pixel size (1 mas at the
+# default grid coupled 79x the continuous value), and a higher-order
+# Hermite-Gaussian oscillates out to its turning point sqrt(2n + 1) (in units of
+# the 1/e field radius / sqrt(2)), so the requirement grows with the degree n.
+# Calibrated against padding-16 references for fields displaced by up to five
+# mode radii and aberrated by up to 400 nm, at padding 2-4: the worst modal
+# acceptance error falls below 0.1% at ~1.0 + 0.31 sqrt(2n + 1) focal-plane
+# pixels per 1/e radius (1.3 px for n = 0, 2.2 px for n = 8); the base adds a
+# 0.1 px margin (errors fall ~10x per 0.15 px).
+SAMPLING_BASE_PIXELS = 1.1
+SAMPLING_PIXELS_PER_TURNING_POINT = 0.31
+# The grid half-width must also contain several radii so the mode is not truncated.
 MIN_GRID_EXTENT_MODE_RADII = 3.0
 
 
-def check_mode_sampling(focal: FocalPlane, mode_radius_mas: float, extent_radii: float = MIN_GRID_EXTENT_MODE_RADII) -> None:
-    """Raise ``ValueError`` unless the mode is resolved and contained by ``focal``'s grid.
+def required_pixels_per_radius(max_degree: int = 0) -> float:
+    """Focal-plane pixels per 1/e mode radius needed up to Hermite-Gaussian ``max_degree``."""
+    return SAMPLING_BASE_PIXELS + SAMPLING_PIXELS_PER_TURNING_POINT * math.sqrt(2 * max_degree + 1)
+
+
+def check_mode_sampling(focal: FocalPlane, mode_radius_mas: float,
+                        extent_radii: float = MIN_GRID_EXTENT_MODE_RADII, max_degree: int = 0) -> None:
+    """Raise ``ValueError`` unless modes up to ``max_degree`` are resolved and contained by ``focal``'s grid.
 
     The focal pixel scale is ``lambda / (pad_factor * D)``: raise
-    ``telescope.pad_factor`` for a narrower mode, or ``telescope.n_pix`` (grid
-    extent ``~ n_pix/2 * lambda/D``) for a wider one.
+    ``telescope.pad_factor`` for a narrower or higher-order mode, or
+    ``telescope.n_pix`` (grid extent ``~ n_pix/2 * lambda/D``) for a wider one.
     """
     pixels = mode_radius_mas / focal.pixel_scale_mas
-    if pixels < MIN_PIXELS_PER_MODE_RADIUS:
+    required = required_pixels_per_radius(max_degree)
+    if pixels < required:
         raise ValueError(
             f"Mode radius {mode_radius_mas:g} mas spans {pixels:.2f} focal-plane pixels "
-            f"({focal.pixel_scale_mas:.3g} mas); at least {MIN_PIXELS_PER_MODE_RADIUS} are needed "
-            "for a converged overlap -- increase telescope.pad_factor.")
+            f"({focal.pixel_scale_mas:.3g} mas); Hermite-Gaussian modes up to degree {max_degree} need "
+            f"at least {required:.2f} for a converged (<0.1%) overlap -- increase telescope.pad_factor.")
     half_extent = float(min(-focal.axis_mas[0], focal.axis_mas[-1]))
     if half_extent < extent_radii * mode_radius_mas:
         raise ValueError(

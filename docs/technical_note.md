@@ -157,7 +157,7 @@ The executed showcase notebook provides visual checks of OPD, diffraction struct
 ## Results
 
 <!-- BEGIN GENERATED RESULTS -->
-**Validation: 56 tests passed; all 12 notebook code cells executed without errors; 9 PNG/PDF figure pairs exported.** The last complete notebook execution took 15.4 seconds on the validation machine (Python 3.14.3; CPU only). Runtime varies by machine.
+**Validation: 70 tests passed; all 12 notebook code cells executed without errors; 9 PNG/PDF figure pairs exported.** The last complete notebook execution took 17.1 seconds on the validation machine (Python 3.14.3; CPU only). Runtime varies by machine.
 
 | Baseline quantity | Synthetic result |
 |---|---:|

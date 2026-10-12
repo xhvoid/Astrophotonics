@@ -20,10 +20,10 @@ The project demonstrates physical modelling, unit-aware interfaces, reproducible
 
 ## Install and run
 
-Python **3.10 or newer**; CPU only. From the parent repository root, first enter `Astrophotonics`. This directory is also independently installable if copied into its own repository.
+Python **3.10 or newer**; CPU only. This is a standalone repository. Enter the project directory; the example below uses `~/Documents/Astrophotonics`.
 
 ```bash
-cd Astrophotonics
+cd ~/Documents/Astrophotonics
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
@@ -50,7 +50,7 @@ Edit [baseline.yaml](configs/baseline.yaml) to change seeing, WFE, jitter, wavel
 ## Reproduced results
 
 <!-- BEGIN GENERATED RESULTS -->
-**Validation: 56 tests passed; all 12 notebook code cells executed without errors; 9 PNG/PDF figure pairs exported.** The last complete notebook execution took 15.4 seconds on the validation machine (Python 3.14.3; CPU only). Runtime varies by machine.
+**Validation: 70 tests passed; all 12 notebook code cells executed without errors; 9 PNG/PDF figure pairs exported.** The last complete notebook execution took 17.1 seconds on the validation machine (Python 3.14.3; CPU only). Runtime varies by machine.
 
 | Baseline quantity | Synthetic result |
 |---|---:|
@@ -86,7 +86,7 @@ Atmosphere → AO residual → complex focal field / PSF → fibre / lantern
 - **Optics:** circular pupil, configurable obscuration and simplified spiders, reproducible von Kármán screens, scalar residual-RMS AO prescription, pointing offsets, unitary Fraunhofer FFT, monochromatic and incoherent polychromatic PSFs, measured Strehl and extended Maréchal cross-check.
 - **Photonic input:** normalized complex overlap with a Gaussian SMF; nested orthonormal Hermite–Gaussian modes approximate ideal few-mode acceptance. Lanterns transmit the accepted subspace with an assumed scalar loss. There is no arbitrary random transfer matrix.
 - **Spectroscopy:** seeded synthetic absorption lines or explicit ASCII/FITS template, relativistic Doppler injection, constant-R Gaussian LSF, finite pixel integration, staged throughput, Poisson source/background/dark counts and independent read noise.
-- **RV:** coarse search and continuous χ² template matching; the coarse grid is densified to half the template's smallest velocity correlation scale across the search so wide searches do not step over the true basin, and the lowest local minima are each refined (a heuristic: reduced χ² flags a wrong minimum); local spectral-gradient Fisher uncertainty; reduced χ², zero-information and search-boundary diagnostics. Independent lantern outputs add extraction noise while conserving source photons.
+- **RV:** coarse search and continuous χ² template matching; the coarse grid is densified to half the template's smallest velocity correlation scale, probed at least every half band-width of velocity across the search so wide searches do not step over the true basin, and the lowest local minima are each refined (a heuristic: reduced χ² flags a wrong minimum); local spectral-gradient Fisher uncertainty; reduced χ², zero-information and search-boundary diagnostics. Independent lantern outputs add extraction noise while conserving source photons.
 
 All interface units appear in names/docstrings: metres, micrometres, nanometres, arcseconds, milliarcseconds, seconds, electrons and m/s. The complete baseline parameter table labels **sourced**, **assumed** and **illustrative** settings. There are **no fitted instrument parameters**. A sourced default that is changed is relabelled as assumed.
 

@@ -7,6 +7,8 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import minimize_scalar
 
+from .spectrum import C_M_S
+
 
 @dataclass(frozen=True)
 class RVResult:
@@ -35,11 +37,15 @@ FISHER_DERIVATIVE_STEP_M_S = 1.0
 GRID_STEP_PER_CORRELATION_SCALE = 0.5
 # Number of lowest coarse-grid local minima refined independently.
 REFINED_CANDIDATES = 3
-# Velocities across the search interval at which the correlation scale is
-# sampled; the smallest finite scale sets the grid spacing, because line
+# Minimum number of velocities across the search at which the correlation scale
+# is sampled; the smallest finite scale sets the grid spacing, because line
 # content entering or leaving the band can make the template much sharper at
-# some RVs than at the midpoint.
+# some RVs than at the midpoint.  For a model exposing its pixel edges, probes
+# are also spaced by at most PROBES_PER_BAND_WIDTH^-1 of the band's velocity
+# width, so any template feature that enters the band during the search is
+# inside it at some probe.
 CORRELATION_SCALE_SAMPLES = 9
+PROBES_PER_BAND_WIDTH = 2.0
 
 
 def rv_uncertainty(
@@ -118,11 +124,13 @@ def recover_rv(
 
     ``grid_size`` is a minimum: if its spacing exceeds
     ``GRID_STEP_PER_CORRELATION_SCALE`` times the template's velocity
-    correlation scale (the smallest of ``CORRELATION_SCALE_SAMPLES`` estimates
-    across the search), the coarse grid is densified so that a wide search does
-    not step over the true chi-square basin. The ``REFINED_CANDIDATES`` lowest
-    coarse local minima are each refined and the best is kept. This is a
-    heuristic, not a global-optimum guarantee: always check ``reduced_chi2``.
+    correlation scale (the smallest of the estimates at probes spread across the
+    search -- at least ``CORRELATION_SCALE_SAMPLES``, and for a model with
+    ``pixel_edges_um`` no further apart than half the band's velocity width),
+    the coarse grid is densified so that a wide search does not step over the
+    true chi-square basin. The ``REFINED_CANDIDATES`` lowest coarse local minima
+    are each refined and the best is kept. This is a heuristic, not a
+    global-optimum guarantee: always check ``reduced_chi2``.
     """
     flux = np.asarray(flux_e, dtype=float)
     variance = np.asarray(variance_e2, dtype=float)
@@ -145,8 +153,14 @@ def recover_rv(
         return float(np.sum((flux - continuum * predicted)**2 / variance))
 
     # Stay one derivative step inside the bounds the model must support.
+    n_probes = CORRELATION_SCALE_SAMPLES
+    edges = getattr(model, "pixel_edges_um", None)
+    if edges is not None and len(edges) >= 2 and edges[0] > 0 and edges[-1] > edges[0]:
+        band_width_m_s = C_M_S * float(np.log(edges[-1] / edges[0]))
+        n_probes = max(n_probes, int(np.ceil(PROBES_PER_BAND_WIDTH * (search_max_m_s - search_min_m_s)
+                                             / band_width_m_s)) + 1)
     probes = np.linspace(search_min_m_s + FISHER_DERIVATIVE_STEP_M_S,
-                         search_max_m_s - FISHER_DERIVATIVE_STEP_M_S, CORRELATION_SCALE_SAMPLES)
+                         search_max_m_s - FISHER_DERIVATIVE_STEP_M_S, n_probes)
     scales = np.array([velocity_correlation_scale(model, float(v), variance, continuum) for v in probes])
     scales = scales[np.isfinite(scales) & (scales > 0)]
     scale = float(scales.min()) if scales.size else float("nan")

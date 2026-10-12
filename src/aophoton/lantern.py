@@ -41,7 +41,7 @@ def mode_basis(focal: FocalPlane, mode_radius_mas: float, n_modes: int) -> NDArr
     # Hermite-Gaussian order n extends to ~sqrt(n + 1) fundamental radii.
     max_degree = int(np.ceil((np.sqrt(8 * n_modes + 1) - 1) / 2)) - 1
     check_mode_sampling(focal, mode_radius_mas,
-                        MIN_GRID_EXTENT_MODE_RADII * float(np.sqrt(max_degree + 1)))
+                        MIN_GRID_EXTENT_MODE_RADII * float(np.sqrt(max_degree + 1)), max_degree=max_degree)
     x, y = np.meshgrid(focal.axis_mas / mode_radius_mas, focal.axis_mas / mode_radius_mas)
     envelope = np.exp(-(x**2 + y**2))
     basis: list[NDArray[np.float64]] = []
