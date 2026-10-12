@@ -2,7 +2,7 @@
 
 This report is generated from saved pytest and notebook execution records. Validation is synthetic and numerical; no observed spectrum or optical-bench dataset has been fitted.
 
-**Validation: 70 tests passed; all 12 notebook code cells executed without errors; 9 PNG/PDF figure pairs exported.** The last complete notebook execution took 17.1 seconds on the validation machine (Python 3.14.3; CPU only). Runtime varies by machine.
+**Validation: 73 tests passed; all 12 notebook code cells executed without errors; 9 PNG/PDF figure pairs exported.** The last complete notebook execution took 21.1 seconds on the validation machine (Python 3.14.3; CPU only). Runtime varies by machine.
 
 ## Evidence
 
@@ -10,8 +10,8 @@ This report is generated from saved pytest and notebook execution records. Valid
 |---|---|
 | Package installation | Editable installation and distributable wheel; see `results/package_validation.json` for the separate-install verification. |
 | End-to-end baseline | `results/showcase_baseline/summary.json`; configuration, provenance and package versions are retained. |
-| Automated tests | `70` passed, zero failed/errors/skipped; [pytest.xml](../results/pytest.xml), bound with [pytest_record.json](../results/pytest_record.json) to the SHA-256 of the package source, the `configs/` inputs and the tests/scripts it ran, and to the `aophoton` module the session actually imported (this project's `src/`). |
-| Fresh-kernel notebook | 12 executed code cells, zero error outputs; [notebook_execution.json](../results/notebook_execution.json), bound to the SHA-256 of the executed notebook, package source, `configs/` inputs and every result product it wrote in `results/` and `figures/`, and to the `aophoton` module the kernel imported (run `ba263ce3c945`). A failed or stale rerun, or an edited input or product, invalidates it and blocks this report. |
+| Automated tests | `73` passed, zero failed/errors/skipped; [pytest.xml](../results/pytest.xml), bound with [pytest_record.json](../results/pytest_record.json) to the SHA-256 of the package source, the `configs/` inputs and the tests/scripts it ran, and to the `aophoton` module the session actually imported (this project's `src/`). |
+| Fresh-kernel notebook | 12 executed code cells, zero error outputs; [notebook_execution.json](../results/notebook_execution.json), bound to the SHA-256 of the executed notebook, package source, `configs/` inputs and every result product it wrote in `results/` and `figures/`, and to the `aophoton` module the kernel imported (run `4ec90ad7697f`). A failed or stale rerun, or an edited input or product, invalidates it and blocks this report. |
 | Figures | 9 plots, each in 300 dpi PNG and PDF, in `figures/`; all plots visually inspected for labels and layout. |
 | Repeated seeds | Pixel-for-pixel identical optical and noisy spectral arrays in the integration tests. |
 | External validation | No OOPAO, observational, or manufactured-lantern validation performed. |
@@ -29,7 +29,7 @@ This report is generated from saved pytest and notebook execution records. Valid
 - **Wide RV search:** a noiseless injection recovered within 0.01 m/s over a ±400 km/s search; the coarse grid densifies to half the template's smallest velocity correlation scale, probed at least every half band-width of velocity across the search (so a line that enters even a 9-pixel band only away from the probes of a fixed set is still seen), and the three lowest local minima are refined. This is a heuristic, so a mismatched template or wrong minimum is flagged by reduced χ² far above its noise range.
 - **Noisy RV uncertainty:** 64 independent recoveries must have standardized mean and variance within analytic three-sigma ensemble bounds. This supports local conditional uncertainty only; it does not validate calibration floors.
 - **Input handling:** unknown configuration keys, invalid units/arrays, insufficient template coverage (including the 1 m/s Fisher-derivative margin beyond the search), fibre modes unresolved by the focal-plane sampling or truncated by the grid, absent RV information and truncated searches are explicitly checked or diagnosed.
-- **Modal sampling:** the focal-plane sampling floor grows with Hermite-Gaussian degree n as 1.1 + 0.31·√(2n+1) pixels per 1/e radius (1.41 px for a single mode, 2.38 px at degree 8), calibrated so the acceptance of fields displaced by up to five radii and aberrated by up to 400 nm agrees with a padding-16 reference to better than 0.1%; a 45-mode basis previously accepted at 1.30 px overestimated acceptance by 62%.
+- **Modal sampling:** the focal-plane sampling floor grows with Hermite-Gaussian degree n as 1.1 + 0.31·√(2n+1) pixels per 1/e radius (1.41 px for a single mode, 2.38 px at degree 8), calibrated for degrees 0–8 so the acceptance of fields displaced by up to five radii and aberrated by up to 400 nm agrees with a padding-16 reference to better than 0.1% (higher degrees use the same floor as an extrapolation; independent checks at degrees 16 and 24 found 0.11–0.15%); a 45-mode basis previously accepted at 1.30 px overestimated acceptance by 62%.
 
 ## Reproducing the report
 

@@ -423,7 +423,7 @@ metrics=dict(baseline=summary,conclusions=conclusions,strehl_cases=strehl_rows,
              seeing_arcsec=seeing_values.tolist(),seeing_coupling=seeing_eta,
              notebook_runtime_s=elapsed)
 (RESULTS/'showcase_metrics.json').write_text(json.dumps(metrics,indent=2,allow_nan=False)+'\\n')
-print(f'Notebook numerical work: {elapsed:.1f} s. Figures exported as 300 dpi PNG and vector PDF to {FIGURES}.')
+print(f'Notebook numerical work: {elapsed:.1f} s. Figures exported as 300 dpi PNG and vector PDF to figures/.')
 ''')
 md('''
 **Physical limitations.** Scalar polarization; finite periodic turbulence with no

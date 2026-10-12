@@ -16,19 +16,27 @@ from .propagation import FocalPlane
 # default grid coupled 79x the continuous value), and a higher-order
 # Hermite-Gaussian oscillates out to its turning point sqrt(2n + 1) (in units of
 # the 1/e field radius / sqrt(2)), so the requirement grows with the degree n.
-# Calibrated against padding-16 references for fields displaced by up to five
-# mode radii and aberrated by up to 400 nm, at padding 2-4: the worst modal
-# acceptance error falls below 0.1% at ~1.0 + 0.31 sqrt(2n + 1) focal-plane
-# pixels per 1/e radius (1.3 px for n = 0, 2.2 px for n = 8); the base adds a
-# 0.1 px margin (errors fall ~10x per 0.15 px).
+# Calibrated for degrees 0-8 against padding-16 references for fields displaced
+# by up to five mode radii and aberrated by up to 400 nm, at padding 2-4: the
+# worst modal acceptance error falls below 0.1% at ~1.0 + 0.31 sqrt(2n + 1)
+# focal-plane pixels per 1/e radius (1.3 px for n = 0, 2.2 px for n = 8); the
+# base adds a 0.1 px margin (errors fall ~10x per 0.15 px).  Above degree 8 the
+# same formula is an extrapolation: independent checks at degrees 16 and 24
+# found ~0.11-0.15% at the floor, so the 0.1% bound is only claimed up to
+# CALIBRATED_MAX_DEGREE.
 SAMPLING_BASE_PIXELS = 1.1
 SAMPLING_PIXELS_PER_TURNING_POINT = 0.31
+CALIBRATED_MAX_DEGREE = 8
 # The grid half-width must also contain several radii so the mode is not truncated.
 MIN_GRID_EXTENT_MODE_RADII = 3.0
 
 
 def required_pixels_per_radius(max_degree: int = 0) -> float:
-    """Focal-plane pixels per 1/e mode radius needed up to Hermite-Gaussian ``max_degree``."""
+    """Focal-plane pixels per 1/e mode radius needed up to Hermite-Gaussian ``max_degree``.
+
+    Keeps the modal acceptance error below 0.1% for degrees 0 to
+    ``CALIBRATED_MAX_DEGREE``; higher degrees are an extrapolation (~0.1-0.2%).
+    """
     return SAMPLING_BASE_PIXELS + SAMPLING_PIXELS_PER_TURNING_POINT * math.sqrt(2 * max_degree + 1)
 
 
@@ -43,10 +51,13 @@ def check_mode_sampling(focal: FocalPlane, mode_radius_mas: float,
     pixels = mode_radius_mas / focal.pixel_scale_mas
     required = required_pixels_per_radius(max_degree)
     if pixels < required:
+        accuracy = ("a converged (<0.1%) overlap" if max_degree <= CALIBRATED_MAX_DEGREE
+                    else "an overlap converged to ~0.1-0.2% (extrapolated beyond degree "
+                         f"{CALIBRATED_MAX_DEGREE})")
         raise ValueError(
             f"Mode radius {mode_radius_mas:g} mas spans {pixels:.2f} focal-plane pixels "
             f"({focal.pixel_scale_mas:.3g} mas); Hermite-Gaussian modes up to degree {max_degree} need "
-            f"at least {required:.2f} for a converged (<0.1%) overlap -- increase telescope.pad_factor.")
+            f"at least {required:.2f} for {accuracy} -- increase telescope.pad_factor.")
     half_extent = float(min(-focal.axis_mas[0], focal.axis_mas[-1]))
     if half_extent < extent_radii * mode_radius_mas:
         raise ValueError(

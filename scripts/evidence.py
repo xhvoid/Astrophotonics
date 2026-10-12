@@ -27,6 +27,17 @@ PRODUCT_PATTERNS = (
     "results/parameter_provenance.json", "results/showcase_baseline/*",
     "figures/*.png", "figures/*.pdf",
 )
+# The complete set one notebook run must itself produce before it is certified.
+FIGURE_NAMES = (
+    "core_design_map", "coupling_sensitivity", "field_overlap", "rv_port_trade", "rv_recovery",
+    "synthetic_observation", "system_overview", "wavefront_psf", "wavelength_seeing",
+)
+REQUIRED_PRODUCTS = (
+    "results/showcase_metrics.json", "results/design_map.npz", "results/port_trade.json",
+    "results/parameter_provenance.json", "results/showcase_baseline/summary.json",
+    "results/showcase_baseline/spectrum.csv", "results/showcase_baseline/arrays.npz",
+    *(f"figures/{name}.{suffix}" for name in FIGURE_NAMES for suffix in ("png", "pdf")),
+)
 # Environment variable through which tests/conftest.py reports the imported module.
 IMPORT_RECORD_ENV = "AOPHOTON_IMPORT_RECORD"
 
@@ -161,6 +172,9 @@ def verified_record(root: Path) -> dict:
     if record.get("notebook_sha256") != file_digest(root / NOTEBOOK):
         raise RuntimeError("Notebook changed since its recorded passing execution; rerun execute_showcase.py.")
     _check_common(record, root, "execute_showcase.py")
+    missing = sorted(set(REQUIRED_PRODUCTS) - set(record.get("products_sha256") or {}))
+    if missing:
+        raise RuntimeError(f"The recorded notebook execution did not produce {missing}; rerun execute_showcase.py.")
     if record.get("products_sha256") != product_digests(root):
         raise RuntimeError("Result products (results/, figures/) changed since the recorded notebook "
                            "execution; rerun execute_showcase.py.")

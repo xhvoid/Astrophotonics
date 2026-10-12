@@ -23,6 +23,16 @@ def _load(name):
     return module
 
 
+def _write_products(directory, skip=(), tag="old"):
+    evidence = _load("evidence")
+    for relative in evidence.REQUIRED_PRODUCTS:
+        if relative in skip:
+            continue
+        target = directory / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(f"{tag} {relative}\n")
+
+
 @pytest.fixture
 def project(tmp_path):
     """A minimal project tree holding a cleanly executed notebook, its inputs,
@@ -32,10 +42,8 @@ def project(tmp_path):
     (tmp_path / "src/aophoton/core.py").write_text("VALUE = 1\n")
     (tmp_path / "configs").mkdir()
     (tmp_path / "configs/baseline.yaml").write_text("ao: {residual_wfe_nm: 150.0}\n")
-    (tmp_path / "results").mkdir()
+    _write_products(tmp_path)
     (tmp_path / "results/showcase_metrics.json").write_text('{"baseline": {"mean_smf_coupling": 0.4711}}\n')
-    (tmp_path / "figures").mkdir()
-    (tmp_path / "figures/plot.png").write_bytes(b"png")
     (tmp_path / "notebooks").mkdir()
     cell = nbformat.v4.new_code_cell("1 + 1", execution_count=1)
     cell.outputs = [nbformat.v4.new_output("execute_result", {"text/plain": "2"}, execution_count=1)]
@@ -109,7 +117,7 @@ def test_notebook_record_is_bound_to_inputs_and_products(project, change):
         (project / "results/showcase_metrics.json").write_text('{"baseline": {"mean_smf_coupling": 0.9999}}\n')
         match = "Result products"
     elif change == "figure":
-        (project / "figures/plot.png").write_bytes(b"other")
+        (project / "figures/core_design_map.png").write_bytes(b"other")
         match = "Result products"
     else:
         (project / "figures/new.pdf").write_bytes(b"pdf")
@@ -190,3 +198,52 @@ def test_run_tests_certifies_only_the_project_it_imported(project, own_package):
         assert evidence.verified_test_record(project)["tests"] == 1
     else:
         assert record["status"] == "failed" and record["imported_from"] != evidence.IMPORT_TARGET
+
+
+class _NoKernel:
+    has_kernel = False
+
+
+def _staging_client(write):
+    """A stand-in NotebookClient that 'executes' by calling ``write(stage)``,
+    where ``stage`` is the kernel working directory the runner chose."""
+    class StagingClient:
+        def __init__(self, notebook, resources=None, **kwargs):
+            self.stage = Path(resources["metadata"]["path"])
+
+        def execute(self, **kwargs):
+            write(self.stage)
+
+    return StagingClient
+
+
+def test_run_omitting_an_export_fails_and_keeps_published_products(project, monkeypatch):
+    # The notebook computes everything but no longer writes showcase_metrics.json:
+    # the older published copy must not be certified as this run's product.
+    execute = _load("execute_showcase")
+    before = (project / "results/showcase_metrics.json").read_text()
+    monkeypatch.setattr(execute, "NotebookClient", _staging_client(
+        lambda stage: _write_products(stage, skip={"results/showcase_metrics.json"}, tag="new")))
+    monkeypatch.setattr(execute, "KernelManager", _NoKernel)
+    monkeypatch.setattr(execute, "_kernel_import_path", lambda kernel: str(project / "src/aophoton/__init__.py"))
+    with pytest.raises(RuntimeError, match="did not produce required outputs.*showcase_metrics.json"):
+        execute.main(project)
+    record = json.loads((project / "results/notebook_execution.json").read_text())
+    assert record["status"] == "failed"
+    assert (project / "results/showcase_metrics.json").read_text() == before
+    assert (project / "figures/core_design_map.png").read_text().startswith("old")
+
+
+def test_complete_run_publishes_exactly_its_own_products(project, monkeypatch):
+    execute = _load("execute_showcase")
+    evidence = _load("evidence")
+    (project / "figures/retired_plot.png").write_text("stale product of an earlier notebook\n")
+    monkeypatch.setattr(execute, "NotebookClient", _staging_client(lambda stage: _write_products(stage, tag="new")))
+    monkeypatch.setattr(execute, "KernelManager", _NoKernel)
+    monkeypatch.setattr(execute, "_kernel_import_path", lambda kernel: str(project / "src/aophoton/__init__.py"))
+    execute.main(project)
+    assert not (project / "figures/retired_plot.png").exists()
+    assert set(evidence.product_digests(project)) == set(evidence.REQUIRED_PRODUCTS)
+    assert all((project / r).read_text().startswith("new") for r in evidence.REQUIRED_PRODUCTS)
+    record = evidence.verified_record(project)
+    assert record["status"] == "passed" and set(record["products_sha256"]) == set(evidence.REQUIRED_PRODUCTS)

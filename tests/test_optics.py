@@ -255,3 +255,17 @@ def test_minimum_accepted_sampling_is_converged_for_displaced_fields(degree):
             a = float(modal_coupling(coarse.field, mode_basis(coarse, radius, n_modes)).sum())
             b = float(modal_coupling(fine.field, mode_basis(fine, radius, n_modes)).sum())
             assert abs(a - b) <= 1e-3 * max(b, 1e-3)
+
+
+def test_sampling_message_does_not_claim_calibration_beyond_its_range():
+    from aophoton.coupling import CALIBRATED_MAX_DEGREE
+    from aophoton.lantern import mode_basis
+    from aophoton.propagation import propagate
+    from aophoton.pupil import make_pupil
+
+    focal = propagate(make_pupil(32), np.zeros((32, 32)), 1.555, 2)
+    with pytest.raises(ValueError, match=r"<0\.1%"):
+        mode_basis(focal, 29, 45)                                   # degree 8: calibrated
+    with pytest.raises(ValueError, match="extrapolated beyond degree 8"):
+        mode_basis(focal, 29, 66)                                   # degree 10
+    assert CALIBRATED_MAX_DEGREE == 8
