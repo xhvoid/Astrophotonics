@@ -1,15 +1,15 @@
 {
   "status": "passed",
-  "run_id": "ed518476bece4294b7234eb75a0db781",
-  "started_utc": "2026-10-12T08:55:07+00:00",
+  "run_id": "610dd9aac88c45ea86557fc069650b58",
+  "started_utc": "2026-10-12T13:09:32+00:00",
   "source_sha256": "0e23e94b1f53c062dcf8cb47b29705cc382899b3eedcee2cc7a6ca920f10b217",
   "inputs_sha256": "1e0f28fa85b26ed768c69090eef84cdeddbc9da2b9f3011d11995a7199fc0724",
-  "tests_sha256": "ceffe17ff8c2965dd9762264e7cfbcc21503966e92f34cb9419733d325d9aa45",
+  "tests_sha256": "ed6e5baa35a1274278d4be96f108cac6e46c4d5e1663a5586716eac3e6f41f3b",
   "exit_code": 0,
   "imported_from": "src/aophoton/__init__.py",
-  "tests": 76,
+  "tests": 78,
   "failures": 0,
   "errors": 0,
   "skipped": 0,
-  "junit_sha256": "d927b0c97ae6e5e1d52048e84c6ced7ea909278e5af345120ab7d1973532a15a"
+  "junit_sha256": "1d0d261a3e4ab999e176cdff67e63f35cc290ee1faa47a30ca10d70234a0d82f"
 }

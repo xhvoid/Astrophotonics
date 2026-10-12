@@ -91,8 +91,13 @@ def inputs_digest(root: Path) -> str:
     root = Path(root)
     configs = sorted(p for p in (root / "configs").rglob("*") if p.is_file())
     digest = hashlib.sha256(_tree_digest(root, configs).encode())
-    for template in sorted({t for c in configs if c.suffix in {".yaml", ".yml"} for t in _referenced_templates(c)}):
-        digest.update(import_location(root, template).encode() + b"\0")
+    templates = {import_location(root, t): t for c in configs if c.suffix in {".yaml", ".yml"}
+                 for t in _referenced_templates(c)}
+    # Ordered by the portable labels that are hashed (project-relative inside,
+    # absolute outside), so moving the project cannot reorder unchanged inputs.
+    for label in sorted(templates):
+        template = templates[label]
+        digest.update(label.encode() + b"\0")
         digest.update((template.read_bytes() if template.is_file() else b"<missing>") + b"\0")
     return digest.hexdigest()
 

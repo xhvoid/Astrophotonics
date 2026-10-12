@@ -100,7 +100,8 @@ def _publish(stage: Path, root: Path, produced: dict[str, str]) -> None:
     published copies one atomic rename at a time, and only once all of them are
     in place are stale products of earlier runs removed.  Any failure restores
     the previous set exactly (verified by digest) before the error propagates,
-    so a failed publication never leaves old and new products mixed.
+    so a failed publication never leaves old and new products mixed.  If the
+    restore itself fails, the complete backup is kept and the error names it.
     """
     previous = product_digests(root)
     stale = sorted(set(previous) - set(produced))
@@ -121,9 +122,16 @@ def _publish(stage: Path, root: Path, produced: dict[str, str]) -> None:
                 (root / relative).unlink()
             if product_digests(root) != produced:
                 raise RuntimeError("Published products differ from the staged run.")
-        except BaseException:
+        except BaseException as error:
             restored = False
-            _restore(root, backup, previous)
+            try:
+                _restore(root, backup, previous)
+            except BaseException as restore_error:
+                # The backup is retained (restored stays False): say where it is.
+                raise RuntimeError(
+                    f"Publication failed ({type(error).__name__}: {error}) and restoring the previous "
+                    f"products also failed ({type(restore_error).__name__}: {restore_error}); the complete "
+                    f"previous product set is preserved in {backup}.") from restore_error
             restored = True
             raise
     finally:

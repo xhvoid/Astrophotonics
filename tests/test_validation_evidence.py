@@ -323,3 +323,53 @@ def test_read_only_destination_is_refused_before_anything_changes(project, monke
         assert evidence.product_digests(project) == before
     finally:
         locked.chmod(0o644)
+
+
+def test_failed_rollback_names_the_retained_backup(project, monkeypatch):
+    # Storage that fails during publication AND restoration: the complete
+    # previous set must survive in a backup that the error (and record) names.
+    import os
+
+    execute = _load("execute_showcase")
+    evidence = _load("evidence")
+    before = evidence.product_digests(project)
+    calls, real_replace = [], os.replace
+
+    def failing_storage(source, target):
+        calls.append(target)
+        if len(calls) > 3:
+            raise OSError("persistent destination storage failure")
+        return real_replace(source, target)
+
+    monkeypatch.setattr(execute, "NotebookClient", _staging_client(lambda stage: _write_products(stage, tag="new")))
+    monkeypatch.setattr(execute, "KernelManager", _NoKernel)
+    monkeypatch.setattr(execute, "_kernel_import_path", lambda kernel: str(project / "src/aophoton/__init__.py"))
+    monkeypatch.setattr(execute.os, "replace", failing_storage)
+    with pytest.raises(RuntimeError, match="previous product set is preserved in") as raised:
+        execute.main(project)
+    [backup] = project.glob(".publish-backup-*")
+    assert str(backup) in str(raised.value)
+    assert evidence.product_digests(backup) == before                  # complete, unmodified previous set
+    record = json.loads((project / "results/notebook_execution.json").read_text())
+    assert record["status"] == "failed" and str(backup) in record["error"]
+
+
+def test_moved_project_with_internal_and_external_templates_keeps_its_evidence(tmp_path):
+    # Unchanged inputs must hash identically after the project moves, even when
+    # one template is project-internal and another is an absolute external file.
+    evidence = _load("evidence")
+    shared = tmp_path / "m-shared"
+    shared.mkdir()
+    (shared / "external.csv").write_text("1.54,1.0\n1.57,1.0\n")
+    source = tmp_path / "a-source"
+    (source / "configs").mkdir(parents=True)
+    (source / "templates").mkdir()
+    (source / "templates/star.csv").write_text("1.54,0.9\n1.57,0.9\n")
+    (source / "configs/baseline.yaml").write_text("observation:\n  template_path: ../templates/star.csv\n")
+    (source / "configs/shared.yaml").write_text(f"observation:\n  template_path: {shared / 'external.csv'}\n")
+    before = evidence.inputs_digest(source)
+    moved = tmp_path / "z-moved"
+    source.rename(moved)
+    assert evidence.inputs_digest(moved) == before
+    (shared / "external.csv").write_text("1.54,0.5\n1.57,0.5\n")      # a real change is still detected
+    assert evidence.inputs_digest(moved) != before
