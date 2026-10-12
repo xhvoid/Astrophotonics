@@ -20,19 +20,21 @@ The project demonstrates physical modelling, unit-aware interfaces, reproducible
 
 ## Install and run
 
-Python **3.10 or newer**; CPU only. This is a standalone repository. Enter the project directory; the example below uses `~/Documents/Astrophotonics`.
+Python **3.10 or newer**; CPU only. Clone this standalone repository and create an isolated environment:
 
 ```bash
-cd ~/Documents/Astrophotonics
+git clone https://github.com/xhvoid/Astrophotonics.git
+cd Astrophotonics
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
 aophoton simulate --config configs/baseline.yaml
-python -m pytest -q
+python scripts/run_tests.py
 python scripts/execute_showcase.py
+python scripts/update_result_sections.py
 ```
 
-The CLI writes `results/baseline/summary.json`, `spectrum.csv`, and `arrays.npz`. The JSON includes the full configuration, every setting's provenance, package versions, Strehl/coupling/SNR and RV results. The CSV includes expected and noisy electrons, their variance, SNR, and wavelength-dependent coupling. The notebook executor uses the launching Python interpreter, starts a fresh kernel, rejects cell errors, saves outputs, verifies figure pairs and closes the kernel.
+The CLI writes `results/baseline/summary.json`, `spectrum.csv`, and `arrays.npz`. The JSON includes the full configuration, every setting's provenance, package versions, Strehl/coupling/SNR and RV results. The CSV includes expected and noisy electrons, their variance, SNR, and wavelength-dependent coupling. The notebook executor uses the launching Python interpreter and runs in a fresh staging directory. It requires all 25 expected result and figure files before publishing. Read-only destinations are rejected before changes; other publication errors trigger hash-verified restoration of the previous set. If storage errors prevent restoration, the error identifies the retained backup. Passing evidence binds the imported source, configuration files, referenced templates and published outputs.
 
 For just the simulation, use `pip install -e .`; FITS support is optional through `.[fits]`. `.[dev]` includes tests, FITS and notebook execution. No downloads are performed by the simulation or showcase. Interactive notebook frontends are optional; the execution script is sufficient to reproduce the saved notebook.
 
@@ -111,7 +113,7 @@ An [OOPAOAdapter](src/aophoton/adapters.py) accepts explicitly matched external 
 | Scientific validation | `tests/`, `docs/validation_report.md` |
 | Application-facing story | executed notebook, `figures/`, `results/` |
 
-The surrounding AO-fed IFU project uses intensity PSF proxies and spaxel coupling. This package needs complex focal fields and coherent modal overlaps, so it has its own `src/aophoton` implementation and does not import or modify those modules.
+The separate [AO-fed IFU simulator](https://github.com/xhvoid/AO-Fed-IFU-Spectrograph-Simulation) uses intensity PSF proxies and spaxel coupling. This study uses complex focal fields and coherent modal overlaps through its own `src/aophoton` implementation. Neither package imports the other, and their tests and validation evidence are independent.
 
 ## Reproducibility and contribution
 
