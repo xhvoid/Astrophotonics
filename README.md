@@ -1,12 +1,19 @@
 # AO-Photonic Spectrograph Performance Simulator
 
-**How do seeing, residual adaptive-optics wavefront error, tip-tilt jitter, and photonic-lantern mode count change fibre coupling, spectral SNR, and radial-velocity precision?**
+A small, reproducible Python model of how residual adaptive-optics wavefront error (WFE), tip-tilt jitter and photonic-lantern mode count set fibre coupling, spectral SNR and radial-velocity (RV) precision. It is a **NIRPS-like, ANDES-inspired conceptual trade study** that connects complex wave optics to a synthetic spectroscopic measurement.
 
-A small, reproducible Python project connecting complex wave optics to a synthetic spectroscopic measurement. It is a **NIRPS-like, ANDES-inspired conceptual trade study** for astronomical-instrumentation and astrophotonics portfolios.
+**Injection error budget** (single-mode fibre, 1.555 µm, 3.6 m pupil with a 0.25 central obscuration by diameter):
+
+- **Ceiling:** a perfect wavefront couples only **0.70**; the remaining loss is the mismatch between the obscured-pupil Airy field and the Gaussian fibre mode at the assumed 57 mas mode radius.
+- **Tolerance:** on the sampled grid, mean coupling stays ≥ 0.5 only for residual WFE ≤ 75 nm combined with tip-tilt jitter ≤ 20 mas per axis (0.53 at that corner). At the 150 nm baseline it is already 0.49 with zero jitter.
+- **Stability:** at 150 nm WFE, 40 mas of per-axis jitter halves coupling (0.49 → 0.25), so injection stability is a requirement on a par with AO correction.
+- **Mode count:** at 400 nm WFE and 10 mas jitter, a 15-port lantern improves forecast RV precision over the SMF at baseline brightness, but loses at 1/100 brightness, where the extra ports' detector noise and the assumed lantern loss outweigh the extra collected light.
+
+Budget values are read from [design_map.npz](results/design_map.npz) (12 realizations per cell); standard errors reach 0.02–0.05 at 20–30 mas jitter, so thresholds between grid points are not resolved. The lantern comparison is generated result 3 below.
 
 > This is an independent conceptual study and is not an official ESO instrument model.
 
-[**Open the executed showcase notebook**](notebooks/eso_astrophotonics_showcase.ipynb) · [Technical note](docs/technical_note.md) · [Validation report](docs/validation_report.md) · [References](docs/references.md)
+[**Open the executed showcase notebook**](notebooks/eso_astrophotonics_showcase.ipynb) · [Technical note](docs/technical_note.md) · [Validation report](docs/validation_report.md) · [Reproducibility](docs/reproducibility.md) · [References](docs/references.md)
 
 ![Residual WFE and pointing jitter determine coupling; modal acceptance changes the trade.](figures/core_design_map.png)
 
@@ -16,7 +23,7 @@ The core map averages 12 independent realizations per cell at 1.555 µm. The lan
 
 Coupling an AO-corrected focal plane into a photonic input connects optical alignment, wavefront quality, throughput and detector performance. [ESO's NIRPS description](https://www.eso.org/sci/facilities/develop/instruments/NIRPS.html) supplies the 3.6 m aperture, historical HAM resolving-power baseline of 100,000, and three-pixel sampling used as design inspiration. These are historical design choices, not a reconstruction of installed NIRPS performance. [ANDES](https://arxiv.org/abs/2407.14601) motivates the broader ELT-era high-resolution NIR spectroscopy question; this code implements a circular 3.6 m pupil.
 
-The project demonstrates physical modelling, unit-aware interfaces, reproducible experiments, numerical validation and communication of engineering trade-offs. A proposed [photonic-chip testbench comparison](https://www.eso.org/sci/activities/fellowships-and-studentships/engstudentfellow/photonic_chips.html) provides a practical next step.
+The project demonstrates physical modelling, unit-aware interfaces, reproducible experiments, numerical validation and communication of engineering trade-offs. Comparison with a photonic-chip testbench is the practical next step; see [Testbench extension](#testbench-extension).
 
 ## Install and run
 
@@ -30,22 +37,18 @@ source .venv/bin/activate
 python -m pip install -e '.[dev]'
 aophoton simulate --config configs/baseline.yaml
 python scripts/run_tests.py
-python scripts/execute_showcase.py
-python scripts/update_result_sections.py
 ```
 
-The CLI writes `results/baseline/summary.json`, `spectrum.csv`, and `arrays.npz`. The JSON includes the full configuration, every setting's provenance, package versions, Strehl/coupling/SNR and RV results. The CSV includes expected and noisy electrons, their variance, SNR, and wavelength-dependent coupling. The notebook executor uses the launching Python interpreter and runs in a fresh staging directory. It requires all 25 expected result and figure files before publishing. Read-only destinations are rejected before changes; other publication errors trigger hash-verified restoration of the previous set. If storage errors prevent restoration, the error identifies the retained backup. Passing evidence binds the imported source, configuration files, referenced templates and published outputs.
+The CLI writes `results/baseline/summary.json`, `spectrum.csv`, and `arrays.npz`. The JSON includes the full configuration, every setting's provenance, package versions, Strehl/coupling/SNR and RV results. The CSV includes expected and noisy electrons, their variance, SNR, and wavelength-dependent coupling.
 
-For just the simulation, use `pip install -e .`; FITS support is optional through `.[fits]`. `.[dev]` includes tests, FITS and notebook execution. No downloads are performed by the simulation or showcase. Interactive notebook frontends are optional; the execution script is sufficient to reproduce the saved notebook.
+For just the simulation, use `pip install -e .`; FITS support is optional through `.[fits]`. `.[dev]` includes tests, FITS and notebook execution. No downloads are performed by the simulation or showcase.
 
 ```bash
 # Synthetic zero-noise validation, with a separate output directory:
 aophoton simulate --config configs/baseline.yaml --no-noise --output results/noiseless
-
-# After editing notebook source cells in the optional builder:
-python scripts/build_showcase.py
-python scripts/execute_showcase.py
 ```
+
+Regenerating the notebook, figures and validation records is described in [reproducibility.md](docs/reproducibility.md).
 
 Edit [baseline.yaml](configs/baseline.yaml) to change seeing, WFE, jitter, wavelength, resolution, source brightness or detector terms. Set `fibre.feed` to `smf`, `few_mode`, or `lantern`; configure `lantern_ports` for its spatial capacity. Unknown configuration keys fail explicitly. Imported template paths are relative to the YAML file; formats and observational caveats are described in [public_data.md](docs/public_data.md).
 
@@ -77,6 +80,40 @@ Edit [baseline.yaml](configs/baseline.yaml) to change seeing, WFE, jitter, wavel
 <!-- END GENERATED RESULTS -->
 
 These RV errors are conditional statistical forecasts with an exact template and calibration. They are not predicted NIRPS or ANDES accuracy. A single noisy recovery error does not establish an estimator's ensemble bias.
+
+## Testbench extension
+
+ESO's [photonic-chip testbench](https://www.eso.org/sci/activities/fellowships-and-studentships/engstudentfellow/photonic_chips.html) topic sets up an opto-mechanical bench with cameras, line lamps and fibre-fed lasers to characterise photonic spectrographs. Most of what such a bench measures has a counterpart in this model, so bench data could calibrate or falsify it directly. No bench data have been taken; this is the proposed comparison.
+
+| Bench measurement | Model counterpart | Status |
+|---|---|---|
+| Coupling vs. injection offset (fibre or chip input scanned across the spot) | `propagate(..., tip_tilt_mas=(dx, dy))` with `overlap_efficiency` or `modal_coupling` | Runs now (example below) |
+| Coupling vs. imposed aberration (deformable mirror, SLM or phase plate) | Any static OPD map in metres passed to `propagate` | Runs now; aberration maps are user-supplied |
+| Coupling vs. wavelength (tunable or fibre-fed laser) | Per-wavelength `propagate`; band nodes in `simulate_optics` | Runs now |
+| LSF and resolving power from line-lamp exposures | Constant-R Gaussian LSF with pixel integration | Model only; no line-lamp fitting yet |
+| Per-port lantern fluxes, mode-dependent loss | Not modelled: one assumed scalar transmission | Needs a measured transfer matrix |
+
+A static injection-offset scan with the baseline pupil and a flat wavefront:
+
+```python
+import numpy as np
+from aophoton.config import load_config
+from aophoton.pupil import make_pupil
+from aophoton.propagation import propagate
+from aophoton.coupling import gaussian_mode, overlap_efficiency
+
+cfg = load_config("configs/baseline.yaml")
+t, f = cfg.telescope, cfg.fibre
+pupil = make_pupil(t.n_pix, t.diameter_m, t.obscuration, t.spider_width_m)
+flat = np.zeros_like(pupil.amplitude)
+mode = gaussian_mode(propagate(pupil, flat, 1.555, t.pad_factor), f.mode_radius_mas)
+for offset_mas in (0, 10, 20, 30, 40, 60):
+    focal = propagate(pupil, flat, 1.555, t.pad_factor, (offset_mas, 0.0))
+    print(offset_mas, round(overlap_efficiency(focal.field, mode), 3))
+# 0 0.699 · 10 0.679 · 20 0.623 · 30 0.538 · 40 0.435 · 60 0.226
+```
+
+Offsets are angular on the sky. On a bench they convert to a lateral fibre displacement through the injection relay's effective focal length, which the bench would measure; the model assumes none. The full experimental sequence, including line-lamp dispersion and held-out validation, is in the technical note's [future experimental validation](docs/technical_note.md#future-experimental-validation) section.
 
 ## Model and scope
 
@@ -111,21 +148,13 @@ An [OOPAOAdapter](src/aophoton/adapters.py) accepts explicitly matched external 
 | Spectrum, LSF, electrons, RV | `spectrum.py`, `spectrograph.py`, `detector.py`, `radial_velocity.py` |
 | End-to-end simulation / extension | `simulation.py`, `adapters.py` |
 | Scientific validation | `tests/`, `docs/validation_report.md` |
-| Application-facing story | executed notebook, `figures/`, `results/` |
+| Executed analysis and outputs | executed notebook, `figures/`, `results/` |
 
 The separate [AO-fed IFU simulator](https://github.com/xhvoid/AO-Fed-IFU-Spectrograph-Simulation) uses intensity PSF proxies and spaxel coupling. This study uses complex focal fields and coherent modal overlaps through its own `src/aophoton` implementation. Neither package imports the other, and their tests and validation evidence are independent.
 
 ## Reproducibility and contribution
 
-The saved notebook contains the sweep grids, seeds, numerical experiments, figures and computed conclusions. [showcase_metrics.json](results/showcase_metrics.json), [design_map.npz](results/design_map.npz) and [port_trade.json](results/port_trade.json) retain its numerical outputs. [requirements-validated.txt](requirements-validated.txt) records the validated environment; `pyproject.toml` specifies broader supported dependencies. Last-digit equality across different FFT/BLAS versions is not guaranteed.
-
-To refresh the evidence after a change:
-
-```bash
-python scripts/run_tests.py
-python scripts/execute_showcase.py
-python scripts/update_result_sections.py
-```
+The saved notebook contains the sweep grids, seeds, numerical experiments, figures and computed conclusions. [showcase_metrics.json](results/showcase_metrics.json), [design_map.npz](results/design_map.npz) and [port_trade.json](results/port_trade.json) retain its numerical outputs. [requirements-validated.txt](requirements-validated.txt) records the validated environment; `pyproject.toml` specifies broader supported dependencies. Last-digit equality across different FFT/BLAS versions is not guaranteed. The regeneration steps and how the evidence records are verified are in [reproducibility.md](docs/reproducibility.md).
 
 Core tests compare analytic diffraction, energy conservation, small-error theory, physical bounds and statistical ensembles; they do not merely compare to stored reference outputs. Improvements should add a physically justified validation and update the technical note. Large observational files belong in the ignored `data/` directory, with provenance recorded separately.
 
