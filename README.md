@@ -1,15 +1,8 @@
 # AO-Photonic Spectrograph Performance Simulator
 
-A small, reproducible Python model of how residual adaptive-optics wavefront error (WFE), tip-tilt jitter and photonic-lantern mode count set fibre coupling, spectral SNR and radial-velocity (RV) precision. It is a **NIRPS-like, ANDES-inspired conceptual trade study** that connects complex wave optics to a synthetic spectroscopic measurement.
+A reproducible Python simulator linking adaptive-optics wavefront error (WFE), injection jitter and photonic-lantern mode count to fibre coupling, spectral SNR and radial-velocity (RV) precision. This **NIRPS-like, ANDES-inspired conceptual trade study** connects complex wave optics to a synthetic spectroscopic measurement.
 
-**Injection error budget** (single-mode fibre, 1.555 µm, 3.6 m pupil with a 0.25 central obscuration by diameter):
-
-- **Ceiling:** a perfect wavefront couples only **0.70**; the remaining loss is the mismatch between the obscured-pupil Airy field and the Gaussian fibre mode at the assumed 57 mas mode radius.
-- **Tolerance:** on the sampled grid, mean coupling stays ≥ 0.5 only for residual WFE ≤ 75 nm combined with tip-tilt jitter ≤ 20 mas per axis (0.53 at that corner). At the 150 nm baseline it is already 0.49 with zero jitter.
-- **Stability:** at 150 nm WFE, 40 mas of per-axis jitter halves coupling (0.49 → 0.25), so injection stability is a requirement on a par with AO correction.
-- **Mode count:** at 400 nm WFE and 10 mas jitter, a 15-port lantern improves forecast RV precision over the SMF at baseline brightness, but loses at 1/100 brightness, where the extra ports' detector noise and the assumed lantern loss outweigh the extra collected light.
-
-Budget values are read from [design_map.npz](results/design_map.npz) (12 realizations per cell); standard errors reach 0.02–0.05 at 20–30 mas jitter, so thresholds between grid points are not resolved. The lantern comparison is result 3 under [Reproduced results](#reproduced-results).
+**Author: Xu Han** · Independent project in astronomical instrumentation.
 
 > This is an independent conceptual study and is not an official ESO instrument model.
 
@@ -19,11 +12,29 @@ Budget values are read from [design_map.npz](results/design_map.npz) (12 realiza
 
 The core map averages 12 independent realizations per cell at 1.555 µm. The lantern curves assume a 90% transition transmission and an ideal orthonormal modal subspace. Figures are available as [300 dpi PNG](figures/core_design_map.png) and [vector PDF](figures/core_design_map.pdf); uncertainty and detector-cost comparisons appear in the notebook.
 
+**Design findings under the stated assumptions** (single-mode fibre, 1.555 µm, 3.6 m pupil with a 0.25 central obscuration by diameter):
+
+- **Ceiling:** a perfect wavefront couples only **0.70**; the remaining loss is the mismatch between the obscured-pupil Airy field and the Gaussian fibre mode at the assumed 57 mas mode radius.
+- **Tolerance:** on the sampled grid, mean coupling stays ≥ 0.5 only for residual WFE ≤ 75 nm combined with tip-tilt jitter ≤ 20 mas per axis (0.53 at that corner). At the 150 nm baseline it is already 0.49 with zero jitter.
+- **Stability:** at 150 nm WFE, 40 mas of per-axis jitter halves coupling (0.49 → 0.25), so injection stability is a requirement on a par with AO correction.
+- **Mode count:** at 400 nm WFE and 10 mas jitter, a 15-port lantern improves forecast RV precision over the SMF at baseline brightness, but loses at 1/100 brightness, where the extra ports' detector noise and the assumed lantern loss outweigh the extra collected light.
+
+These values are read from [design_map.npz](results/design_map.npz) (12 realizations per cell); standard errors reach 0.02–0.05 at 20–30 mas jitter, so thresholds between grid points are not resolved. The lantern comparison is result 3 under [Reproduced results](#reproduced-results).
+
 ## Why this matters for ESO instrumentation
 
 Coupling an AO-corrected focal plane into a photonic input connects optical alignment, wavefront quality, throughput and detector performance. [ESO's NIRPS description](https://www.eso.org/sci/facilities/develop/instruments/NIRPS.html) supplies the 3.6 m aperture, historical HAM resolving-power baseline of 100,000, and three-pixel sampling used as design inspiration. These are historical design choices, not a reconstruction of installed NIRPS performance. [ANDES](https://arxiv.org/abs/2407.14601) motivates the broader ELT-era high-resolution NIR spectroscopy question; this code implements a circular 3.6 m pupil.
 
 The engineering question is what a photonic feed demands before hardware exists: how much AO correction and injection stability it needs, and when a multi-port lantern is worth its extra detector noise. Comparison with a photonic-chip testbench is the next step; see [Testbench extension](#testbench-extension).
+
+## Engineering evidence
+
+| Engineering question | Implemented evidence |
+|---|---|
+| How do wavefront quality and injection stability set throughput? | Complex-field propagation and coherent modal overlaps; WFE/jitter sweeps with sampling checks and uncertainty estimates in the [executed notebook](notebooks/eso_astrophotonics_showcase.ipynb). |
+| When does extra mode capacity justify more detector channels? | Photon, background, dark and read-noise budgets linked to SNR and conditional RV uncertainty; the [port trade study](results/port_trade.json) includes a brightness-dependent reversal. |
+| How are the numerical results verified? | Analytic diffraction, energy conservation, statistical ensembles and regression tests, with records bound to the source, inputs and outputs; see the [validation report](docs/validation_report.md). |
+| How can another engineer reproduce and extend the work? | A configurable CLI, an installable Python package and a documented [regeneration workflow](docs/reproducibility.md), plus explicit model-to-measurement comparisons below. |
 
 ## Reproduced results
 
@@ -56,7 +67,7 @@ These RV errors are conditional statistical forecasts with an exact template and
 
 ## Testbench extension
 
-ESO's [photonic-chip testbench](https://www.eso.org/sci/activities/fellowships-and-studentships/engstudentfellow/photonic_chips.html) topic sets up an opto-mechanical bench with cameras, line lamps and fibre-fed lasers to characterise photonic spectrographs. Most of what such a bench measures has a counterpart in this model, so bench data could calibrate or falsify it directly. No bench data have been taken; this is the proposed comparison.
+ESO's published [photonic-chip testbench topic](https://www.eso.org/sci/activities/fellowships-and-studentships/engstudentfellow/photonic_chips.html) connects opto-mechanical setup, cameras, line lamps and fibre-fed lasers with the characterisation of photonic spectrographs. Injection scans and line-source measurements could test selected outputs of this simulator. The table separates implemented model capabilities from future experimental work; no bench data have been taken.
 
 | Bench measurement | Model counterpart | Status |
 |---|---|---|
