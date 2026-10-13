@@ -9,11 +9,11 @@ A small, reproducible Python model of how residual adaptive-optics wavefront err
 - **Stability:** at 150 nm WFE, 40 mas of per-axis jitter halves coupling (0.49 → 0.25), so injection stability is a requirement on a par with AO correction.
 - **Mode count:** at 400 nm WFE and 10 mas jitter, a 15-port lantern improves forecast RV precision over the SMF at baseline brightness, but loses at 1/100 brightness, where the extra ports' detector noise and the assumed lantern loss outweigh the extra collected light.
 
-Budget values are read from [design_map.npz](results/design_map.npz) (12 realizations per cell); standard errors reach 0.02–0.05 at 20–30 mas jitter, so thresholds between grid points are not resolved. The lantern comparison is generated result 3 below.
+Budget values are read from [design_map.npz](results/design_map.npz) (12 realizations per cell); standard errors reach 0.02–0.05 at 20–30 mas jitter, so thresholds between grid points are not resolved. The lantern comparison is result 3 under [Reproduced results](#reproduced-results).
 
 > This is an independent conceptual study and is not an official ESO instrument model.
 
-[**Open the executed showcase notebook**](notebooks/eso_astrophotonics_showcase.ipynb) · [Technical note](docs/technical_note.md) · [Validation report](docs/validation_report.md) · [Reproducibility](docs/reproducibility.md) · [References](docs/references.md)
+[**Executed notebook**](notebooks/eso_astrophotonics_showcase.ipynb) · [Technical note](docs/technical_note.md) · [Validation report](docs/validation_report.md) · [Reproducibility](docs/reproducibility.md) · [References](docs/references.md)
 
 ![Residual WFE and pointing jitter determine coupling; modal acceptance changes the trade.](figures/core_design_map.png)
 
@@ -23,34 +23,7 @@ The core map averages 12 independent realizations per cell at 1.555 µm. The lan
 
 Coupling an AO-corrected focal plane into a photonic input connects optical alignment, wavefront quality, throughput and detector performance. [ESO's NIRPS description](https://www.eso.org/sci/facilities/develop/instruments/NIRPS.html) supplies the 3.6 m aperture, historical HAM resolving-power baseline of 100,000, and three-pixel sampling used as design inspiration. These are historical design choices, not a reconstruction of installed NIRPS performance. [ANDES](https://arxiv.org/abs/2407.14601) motivates the broader ELT-era high-resolution NIR spectroscopy question; this code implements a circular 3.6 m pupil.
 
-The project demonstrates physical modelling, unit-aware interfaces, reproducible experiments, numerical validation and communication of engineering trade-offs. Comparison with a photonic-chip testbench is the practical next step; see [Testbench extension](#testbench-extension).
-
-## Install and run
-
-Python **3.10 or newer**; CPU only. Clone this standalone repository and create an isolated environment:
-
-```bash
-git clone https://github.com/xhvoid/Astrophotonics.git
-cd Astrophotonics
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[dev]'
-aophoton simulate --config configs/baseline.yaml
-python scripts/run_tests.py
-```
-
-The CLI writes `results/baseline/summary.json`, `spectrum.csv`, and `arrays.npz`. The JSON includes the full configuration, every setting's provenance, package versions, Strehl/coupling/SNR and RV results. The CSV includes expected and noisy electrons, their variance, SNR, and wavelength-dependent coupling.
-
-For just the simulation, use `pip install -e .`; FITS support is optional through `.[fits]`. `.[dev]` includes tests, FITS and notebook execution. No downloads are performed by the simulation or showcase.
-
-```bash
-# Synthetic zero-noise validation, with a separate output directory:
-aophoton simulate --config configs/baseline.yaml --no-noise --output results/noiseless
-```
-
-Regenerating the notebook, figures and validation records is described in [reproducibility.md](docs/reproducibility.md).
-
-Edit [baseline.yaml](configs/baseline.yaml) to change seeing, WFE, jitter, wavelength, resolution, source brightness or detector terms. Set `fibre.feed` to `smf`, `few_mode`, or `lantern`; configure `lantern_ports` for its spatial capacity. Unknown configuration keys fail explicitly. Imported template paths are relative to the YAML file; formats and observational caveats are described in [public_data.md](docs/public_data.md).
+The engineering question is what a photonic feed demands before hardware exists: how much AO correction and injection stability it needs, and when a multi-port lantern is worth its extra detector noise. Comparison with a photonic-chip testbench is the next step; see [Testbench extension](#testbench-extension).
 
 ## Reproduced results
 
@@ -115,6 +88,33 @@ for offset_mas in (0, 10, 20, 30, 40, 60):
 
 Offsets are angular on the sky. On a bench they convert to a lateral fibre displacement through the injection relay's effective focal length, which the bench would measure; the model assumes none. The full experimental sequence, including line-lamp dispersion and held-out validation, is in the technical note's [future experimental validation](docs/technical_note.md#future-experimental-validation) section.
 
+## Install and run
+
+Python **3.10 or newer**; CPU only. Clone this standalone repository and create an isolated environment:
+
+```bash
+git clone https://github.com/xhvoid/Astrophotonics.git
+cd Astrophotonics
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[dev]'
+aophoton simulate --config configs/baseline.yaml
+python scripts/run_tests.py
+```
+
+The CLI writes `results/baseline/summary.json`, `spectrum.csv`, and `arrays.npz`. The JSON includes the full configuration, every setting's provenance, package versions, Strehl/coupling/SNR and RV results. The CSV includes expected and noisy electrons, their variance, SNR, and wavelength-dependent coupling.
+
+For just the simulation, use `pip install -e .`; FITS support is optional through `.[fits]`. `.[dev]` includes tests, FITS and notebook execution. No downloads are performed by the simulation or notebook.
+
+```bash
+# Synthetic zero-noise validation, with a separate output directory:
+aophoton simulate --config configs/baseline.yaml --no-noise --output results/noiseless
+```
+
+Edit [baseline.yaml](configs/baseline.yaml) to change seeing, WFE, jitter, wavelength, resolution, source brightness or detector terms. Set `fibre.feed` to `smf`, `few_mode`, or `lantern`; configure `lantern_ports` for its spatial capacity. Unknown configuration keys fail explicitly. Imported template paths are relative to the YAML file; formats and observational caveats are described in [public_data.md](docs/public_data.md).
+
+Regenerating the notebook, figures and validation records is described in [reproducibility.md](docs/reproducibility.md).
+
 ## Model and scope
 
 ```text
@@ -123,20 +123,20 @@ Atmosphere → AO residual → complex focal field / PSF → fibre / lantern
 ```
 
 - **Optics:** circular pupil, configurable obscuration and simplified spiders, reproducible von Kármán screens, scalar residual-RMS AO prescription, pointing offsets, unitary Fraunhofer FFT, monochromatic and incoherent polychromatic PSFs, measured Strehl and extended Maréchal cross-check.
-- **Photonic input:** normalized complex overlap with a Gaussian SMF; nested orthonormal Hermite–Gaussian modes approximate ideal few-mode acceptance. Lanterns transmit the accepted subspace with an assumed scalar loss. There is no arbitrary random transfer matrix.
+- **Photonic input:** normalized complex overlap with a Gaussian SMF; nested orthonormal Hermite–Gaussian modes approximate ideal few-mode acceptance. Lanterns transmit the accepted subspace with an assumed scalar loss.
 - **Spectroscopy:** seeded synthetic absorption lines or explicit ASCII/FITS template, relativistic Doppler injection, constant-R Gaussian LSF, finite pixel integration, staged throughput, Poisson source/background/dark counts and independent read noise.
-- **RV:** coarse search and continuous χ² template matching; the coarse grid is densified to half the template's smallest velocity correlation scale, probed at least every half band-width of velocity across the search so wide searches do not step over the true basin, and the lowest local minima are each refined (a heuristic: reduced χ² flags a wrong minimum); local spectral-gradient Fisher uncertainty; reduced χ², zero-information and search-boundary diagnostics. Independent lantern outputs add extraction noise while conserving source photons.
+- **RV:** χ² template matching with a coarse velocity search refined around the lowest minima; local spectral-gradient (Fisher) uncertainty; reduced χ², zero-information and search-boundary diagnostics. Independent lantern outputs add extraction noise while conserving source photons. Search details are in the [technical note](docs/technical_note.md).
 
 All interface units appear in names/docstrings: metres, micrometres, nanometres, arcseconds, milliarcseconds, seconds, electrons and m/s. The complete baseline parameter table labels **sourced**, **assumed** and **illustrative** settings. There are **no fitted instrument parameters**. A sourced default that is changed is relabelled as assumed.
 
-Key assumptions are deliberately visible:
+Key assumptions:
 
 1. `residual_wfe_nm` denotes pupil RMS **at the reference seeing**. At fixed assumed AO attenuation, actual WFE scales as `(seeing/reference_seeing)^(5/6)`. At fixed actual WFE, seeing has no separate independent penalty in this model. Screens are periodic, lack subharmonics, and have exactly imposed RMS; they do not simulate an AO controller.
 2. Jitter is Gaussian RMS **per axis**; independent frames have no physical cadence. Intensities and coupling powers are averaged, not complex fields. Finite-exposure throughput fluctuations are omitted from spectral variance.
 3. The Gaussian radius is an angular 1/e field radius, representing the injection relay. HG modes approximate a parabolic-index guide; port counts are scalar spatial capacities with polarization effects omitted. No physical taper, manufacturing model, modal noise or real fibre cutoff is inferred.
 4. The spectrum has an exact continuum/template and wavelength solution. It omits tellurics, stellar variability, instrumental drift, correlated detector noise, saturation, echelle geometry and extraction cross-talk.
 
-An [OOPAOAdapter](src/aophoton/adapters.py) accepts explicitly matched external OPD snapshots. **OOPAO integration and observational validation remain future work.** No full ELT control system, ray tracing, Maxwell/FDTD propagation, neural network, GUI, or proprietary data is included.
+An [OOPAOAdapter](src/aophoton/adapters.py) accepts explicitly matched external OPD snapshots. **OOPAO integration and observational validation remain future work.** Ray tracing, full-wave (Maxwell/FDTD) propagation and AO control-loop dynamics are out of scope, and no proprietary data are used.
 
 ## Package structure
 
@@ -150,7 +150,7 @@ An [OOPAOAdapter](src/aophoton/adapters.py) accepts explicitly matched external 
 | Scientific validation | `tests/`, `docs/validation_report.md` |
 | Executed analysis and outputs | executed notebook, `figures/`, `results/` |
 
-The separate [AO-fed IFU simulator](https://github.com/xhvoid/AO-Fed-IFU-Spectrograph-Simulation) uses intensity PSF proxies and spaxel coupling. This study uses complex focal fields and coherent modal overlaps through its own `src/aophoton` implementation. Neither package imports the other, and their tests and validation evidence are independent.
+A companion project, the [AO-fed IFU simulator](https://github.com/xhvoid/AO-Fed-IFU-Spectrograph-Simulation), models spaxel coupling with intensity PSFs; this one uses complex focal fields and coherent modal overlaps. The two share no code.
 
 ## Reproducibility and contribution
 
