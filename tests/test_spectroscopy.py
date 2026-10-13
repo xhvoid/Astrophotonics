@@ -171,6 +171,19 @@ def test_wide_rv_search_cannot_step_over_true_basin():
     assert result.reduced_chi2 < 1e-8
 
 
+def test_rv_search_narrower_than_two_derivative_steps():
+    # A +/-0.25 m/s search with 1.25 m/s template padding is a valid configuration
+    # (search + 1 m/s derivative step fits). Correlation-scale probes must stay
+    # inside the search instead of crossing over and leaving template coverage.
+    config = SpectrographConfig(wavelength_max_um=1.546, rv_padding_m_s=1.25)
+    template = synthetic_spectrum(1.539, 1.547, samples=25_000, n_lines=50, seed=91)
+    tight = SpectrographModel(template, config)
+    variance = np.full(tight.wavelength_um.size, 1e-4)
+    result = recover_rv(tight, tight(0.1), variance, search_min_m_s=-0.25, search_max_m_s=0.25)
+    assert abs(result.rv_m_s - 0.1) < 0.01
+    assert result.reduced_chi2 < 1e-8
+
+
 def test_reduced_chi2_flags_a_mismatched_template(model):
     # A wrong template leaves residuals far above the stated variance.
     variance = np.full(model.wavelength_um.size, 1e-4)

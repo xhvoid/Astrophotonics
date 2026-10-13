@@ -28,7 +28,7 @@ The engineering question is what a photonic feed demands before hardware exists:
 ## Reproduced results
 
 <!-- BEGIN GENERATED RESULTS -->
-**Validation: 78 tests passed; all 12 notebook code cells executed without errors; 9 PNG/PDF figure pairs exported.** The last complete notebook execution took 19.9 seconds on the validation machine (Python 3.14.3; CPU only). Runtime varies by machine.
+**Validation: 79 tests passed; all 12 notebook code cells executed without errors; 9 PNG/PDF figure pairs exported.** The last complete notebook execution took 32.1 seconds on the validation machine (Python 3.14.3; CPU only). Runtime varies by machine.
 
 | Baseline quantity | Synthetic result |
 |---|---:|

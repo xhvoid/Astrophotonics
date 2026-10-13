@@ -2,7 +2,7 @@
 
 This report is generated from saved pytest and notebook execution records. Validation is synthetic and numerical; no observed spectrum or optical-bench dataset has been fitted.
 
-**Validation: 78 tests passed; all 12 notebook code cells executed without errors; 9 PNG/PDF figure pairs exported.** The last complete notebook execution took 19.9 seconds on the validation machine (Python 3.14.3; CPU only). Runtime varies by machine.
+**Validation: 79 tests passed; all 12 notebook code cells executed without errors; 9 PNG/PDF figure pairs exported.** The last complete notebook execution took 32.1 seconds on the validation machine (Python 3.14.3; CPU only). Runtime varies by machine.
 
 ## Evidence
 
@@ -10,8 +10,8 @@ This report is generated from saved pytest and notebook execution records. Valid
 |---|---|
 | Package installation | Editable installation and distributable wheel; see `results/package_validation.json` for the separate-install verification. |
 | End-to-end baseline | `results/showcase_baseline/summary.json`; configuration, provenance and package versions are retained. |
-| Automated tests | `78` passed, zero failed/errors/skipped; [pytest.xml](../results/pytest.xml), bound with [pytest_record.json](../results/pytest_record.json) to the SHA-256 of the package source, the `configs/` inputs and the tests/scripts it ran, and to the `aophoton` module the session actually imported (this project's `src/`). |
-| Fresh-kernel notebook | 12 executed code cells, zero error outputs; [notebook_execution.json](../results/notebook_execution.json), bound to the SHA-256 of the executed notebook, package source, `configs/` inputs and every result product it wrote in `results/` and `figures/`, and to the `aophoton` module the kernel imported (run `e12dab318ec5`). The notebook runs in a fresh staging directory and its complete product set is published all-or-nothing (a failed publication restores the previous set). A failed or stale rerun, or an edited input or product, invalidates it and blocks this report. |
+| Automated tests | `79` passed, zero failed/errors/skipped; [pytest.xml](../results/pytest.xml), bound with [pytest_record.json](../results/pytest_record.json) to the SHA-256 of the package source, the `configs/` inputs and the tests/scripts it ran, and to the `aophoton` module the session actually imported (this project's `src/`). |
+| Fresh-kernel notebook | 12 executed code cells, zero error outputs; [notebook_execution.json](../results/notebook_execution.json), bound to the SHA-256 of the executed notebook, package source, `configs/` inputs and every result product it wrote in `results/` and `figures/`, and to the `aophoton` module the kernel imported (run `3f4e76b650cc`). The notebook runs in a fresh staging directory and its complete product set is published all-or-nothing (a failed publication restores the previous set). A failed or stale rerun, or an edited input or product, invalidates it and blocks this report. |
 | Figures | 9 plots, each in 300 dpi PNG and PDF, in `figures/`; all plots visually inspected for labels and layout. |
 | Repeated seeds | Pixel-for-pixel identical optical and noisy spectral arrays in the integration tests. |
 | External validation | No OOPAO, observational, or manufactured-lantern validation performed. |

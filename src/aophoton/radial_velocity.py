@@ -152,15 +152,17 @@ def recover_rv(
             raise ValueError("RV model must return finite flux with the observed shape.")
         return float(np.sum((flux - continuum * predicted)**2 / variance))
 
-    # Stay one derivative step inside the bounds the model must support.
+    # Probe inside the search, one derivative step in where the interval allows;
+    # the model covers the search widened by that step, so every probe's
+    # derivative stays supported even when the interval is narrower than 2 steps.
+    inset = min(FISHER_DERIVATIVE_STEP_M_S, 0.5 * (search_max_m_s - search_min_m_s))
     n_probes = CORRELATION_SCALE_SAMPLES
     edges = getattr(model, "pixel_edges_um", None)
     if edges is not None and len(edges) >= 2 and edges[0] > 0 and edges[-1] > edges[0]:
         band_width_m_s = C_M_S * float(np.log(edges[-1] / edges[0]))
         n_probes = max(n_probes, int(np.ceil(PROBES_PER_BAND_WIDTH * (search_max_m_s - search_min_m_s)
                                              / band_width_m_s)) + 1)
-    probes = np.linspace(search_min_m_s + FISHER_DERIVATIVE_STEP_M_S,
-                         search_max_m_s - FISHER_DERIVATIVE_STEP_M_S, n_probes)
+    probes = np.linspace(search_min_m_s + inset, search_max_m_s - inset, n_probes)
     scales = np.array([velocity_correlation_scale(model, float(v), variance, continuum) for v in probes])
     scales = scales[np.isfinite(scales) & (scales > 0)]
     scale = float(scales.min()) if scales.size else float("nan")
