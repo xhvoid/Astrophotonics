@@ -1,7 +1,18 @@
 {
   "disclaimer": "This is an independent conceptual study and is not an official ESO instrument model.",
+  "run_identity_sha256": "88ca5b418b3ea0db836fc1ac3180293ca2fcb28262dbc738835902fa9a300b46",
+  "noise_mode": "noisy",
   "seed": 2026,
   "feed": "smf",
+  "template": {
+    "source": "synthetic",
+    "generator": "aophoton.spectrum.synthetic_spectrum",
+    "wavelength_min_um": 1.5350000000000001,
+    "wavelength_max_um": 1.575,
+    "seed": 7,
+    "samples": 50000,
+    "samples_sha256": "d9e48e900155c66fac6757a07340735b9bd2e94515361507e585abb3b97addcb"
+  },
   "residual_wfe_nm": 150.00000000000003,
   "measured_strehl": 0.6597629205129092,
   "marechal_without_jitter": 0.6925663699482779,
@@ -10,14 +21,37 @@
   "mean_lantern_coupling": 0.47723054324771136,
   "mean_selected_coupling": 0.47114978961268245,
   "collecting_area_m2": 9.536484375,
+  "median_snr_per_spectral_sample": 144.06412037925725,
+  "detector_pixels_per_spectral_sample": 4,
+  "snr_definition": "Expected source electrons / sqrt(forecast variance) per extracted spectral sample: one detector-pixel-wide wavelength bin summed over 4 spatial extraction pixel(s) in each of 1 independently read channel(s), 4 physical pixels in all. Not per physical detector pixel.",
   "median_snr_per_pixel": 144.06412037925725,
   "injected_rv_m_s": 2300.0,
-  "recovered_rv_m_s": 2296.374196331586,
-  "recovery_bias_m_s": -3.625803668413937,
-  "estimated_rv_uncertainty_m_s": 4.115534338736836,
+  "recovered_rv_m_s": 2298.0042572738175,
+  "recovery_bias_m_s": -1.9957427261824705,
+  "estimated_rv_uncertainty_m_s": 4.111499673845247,
   "rv_at_search_boundary": false,
-  "rv_reduced_chi2": 0.9622294688396336,
+  "rv_reduced_chi2": 0.9636550259773732,
+  "rv_model_evaluations": 147,
   "validation": "Synthetic only; no OOPAO or observational validation",
+  "field_descriptions": {
+    "noise_mode": "noisy: one seeded Poisson/read-noise draw; noiseless: expected counts with the same forecast variance (injection/recovery check)",
+    "run_identity_sha256": "SHA-256 of the configuration, noise mode and template record; replayable with `aophoton replay`",
+    "template": "Template source; a file is identified by the SHA-256 of its bytes, a synthetic template by its generator inputs; samples_sha256 covers the samples used",
+    "median_snr_per_spectral_sample": "Median over the band of snr_per_spectral_sample (see snr_definition)",
+    "median_snr_per_pixel": "Deprecated alias of median_snr_per_spectral_sample, kept for compatibility; it is not per physical detector pixel",
+    "estimated_rv_uncertainty_m_s": "Fisher 1-sigma forecast from the expected spectrum [m/s]",
+    "recovery_bias_m_s": "Recovered minus injected RV of this single realization [m/s]; not an ensemble bias",
+    "collecting_area_m2": "Geometric clear pupil area [m^2]",
+    "spectrum_csv_columns": "Columns of spectrum.csv, in order"
+  },
+  "spectrum_csv_columns": {
+    "wavelength_um": "Geometric-centre wavelength of the detector pixel [um]",
+    "expected_source_e": "Expected source electrons per extracted spectral sample",
+    "background_subtracted_noisy_e": "Background-subtracted electrons of the single seeded noisy draw (Poisson source, dark and background; Gaussian read noise)",
+    "variance_e2": "Forecast variance per extracted spectral sample [e^2]: source, dark, background and read noise of every summed pixel",
+    "snr_per_spectral_sample": "Expected source electrons / sqrt(forecast variance) per extracted spectral sample: one detector-pixel-wide wavelength bin summed over 4 spatial extraction pixel(s) in each of 1 independently read channel(s), 4 physical pixels in all. Not per physical detector pixel.",
+    "coupling": "Feed coupling efficiency, interpolated from the optical wavelength nodes"
+  },
   "configuration": {
     "seed": 2026,
     "telescope": {
@@ -323,6 +357,7 @@
     }
   ],
   "software_versions": {
+    "python": "3.14.3",
     "aophoton": "0.1.0",
     "numpy": "2.5.3",
     "scipy": "1.18.1",

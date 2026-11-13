@@ -26,6 +26,11 @@ class RVResult:
     minimum_chi2: float
     at_boundary: bool
     reduced_chi2: float = float("nan")
+    model_evaluations: int = 0
+
+
+class RVSearchBudgetError(ValueError):
+    """The requested RV search cannot be resolved within its evaluation budget."""
 
 
 # Central-difference step for the Fisher derivative; the model must cover the
@@ -46,6 +51,12 @@ REFINED_CANDIDATES = 3
 # inside it at some probe.
 CORRELATION_SCALE_SAMPLES = 9
 PROBES_PER_BAND_WIDTH = 2.0
+# Default cap on model evaluations per search (scale probes, coarse grid,
+# refinement and Fisher derivative), checked before any grid is allocated.
+# About 20 s for the default R = 100,000 spectrograph model.
+MAX_MODEL_EVALUATIONS = 100_000
+# Iteration cap of each bounded refinement (SciPy's default for this method).
+REFINEMENT_MAX_ITERATIONS = 500
 
 
 def rv_uncertainty(
@@ -85,23 +96,32 @@ def velocity_correlation_scale(
 ) -> float:
     """Velocity scale [m/s] over which the template's chi-square basin decorrelates.
 
-    ``sqrt(sum(w (m - <m>)^2) / sum(w (dm/dRV)^2))`` with ``w = continuum^2 /
-    variance``: the weighted ratio of feature contrast to its velocity gradient.
-    For a Gaussian feature of velocity width sigma it equals sqrt(2) sigma, and it
-    is dominated by the sharpest weighted features. NaN if the model has no RV
-    information.
+    The larger of two weighted ratios (``w = continuum^2 / variance``):
+    contrast to velocity gradient, ``sqrt(sum(w (m - <m>)^2) / sum(w m'^2))``,
+    and gradient to curvature, ``sqrt(sum(w m'^2) / sum(w m''^2))``. For a
+    Gaussian feature of velocity width sigma they are sqrt(2) sigma and
+    sqrt(2/3) sigma, so the first sets the scale and is dominated by the
+    sharpest weighted features. The second keeps the scale physical when the
+    sampled spectrum has almost no contrast but still moves with RV (a
+    symmetric line centred between two pixels), where the first collapses
+    towards zero. Both use the same three model evaluations. NaN if the model
+    has no RV information.
     """
     variance = np.asarray(variance_e2, dtype=float)
     continuum = np.broadcast_to(np.asarray(continuum_e, dtype=float), variance.shape)
     weight = continuum**2 / variance
     centre = np.asarray(model(rv_m_s), dtype=float)
-    derivative = (np.asarray(model(rv_m_s + derivative_step_m_s), dtype=float)
-                  - np.asarray(model(rv_m_s - derivative_step_m_s), dtype=float)) / (2 * derivative_step_m_s)
+    upper = np.asarray(model(rv_m_s + derivative_step_m_s), dtype=float)
+    lower = np.asarray(model(rv_m_s - derivative_step_m_s), dtype=float)
+    derivative = (upper - lower) / (2 * derivative_step_m_s)
+    curvature = (upper - 2 * centre + lower) / derivative_step_m_s**2
     gradient = float(np.sum(weight * derivative**2))
     if not np.isfinite(gradient) or gradient <= 0:
         return float("nan")
     contrast = centre - np.sum(weight * centre) / np.sum(weight)
-    return float(np.sqrt(np.sum(weight * contrast**2) / gradient))
+    bending = float(np.sum(weight * curvature**2))
+    coherence = np.sqrt(gradient / bending) if bending > 0 else 0.0
+    return float(max(np.sqrt(np.sum(weight * contrast**2) / gradient), coherence))
 
 
 def recover_rv(
@@ -113,6 +133,7 @@ def recover_rv(
     search_min_m_s: float = -10_000.0,
     search_max_m_s: float = 10_000.0,
     grid_size: int = 81,
+    max_evaluations: int = MAX_MODEL_EVALUATIONS,
 ) -> RVResult:
     """Grid search then bounded local minimization; no injected RV is provided.
 
@@ -131,6 +152,12 @@ def recover_rv(
     true chi-square basin. The ``REFINED_CANDIDATES`` lowest coarse local minima
     are each refined and the best is kept. This is a heuristic, not a
     global-optimum guarantee: always check ``reduced_chi2``.
+
+    At most ``max_evaluations`` model calls are made, and the total is reported
+    as ``RVResult.model_evaluations``. The worst case is checked before probing
+    and again before the grid is allocated. A search that cannot resolve its
+    interval within the budget raises ``RVSearchBudgetError`` naming the
+    correlation scale and the work it would need.
     """
     flux = np.asarray(flux_e, dtype=float)
     variance = np.asarray(variance_e2, dtype=float)
@@ -145,9 +172,20 @@ def recover_rv(
         raise ValueError("RV search bounds must be finite and increasing [m/s].")
     if isinstance(grid_size, bool) or not isinstance(grid_size, (int, np.integer)) or grid_size < 5:
         raise ValueError("RV grid_size must be an integer >= 5.")
+    if isinstance(max_evaluations, bool) or not isinstance(max_evaluations, (int, np.integer)) or max_evaluations < 1:
+        raise ValueError("RV max_evaluations must be a positive integer.")
+    calls = [0]
+    # Refinement of each candidate plus the two Fisher-derivative evaluations.
+    reserved = REFINED_CANDIDATES * REFINEMENT_MAX_ITERATIONS + 2
+
+    def counted(rv: float) -> NDArray[np.float64]:
+        if calls[0] >= max_evaluations:
+            raise RVSearchBudgetError(f"RV search exceeded its budget of {max_evaluations} model evaluations.")
+        calls[0] += 1
+        return model(rv)
 
     def objective(rv: float) -> float:
-        predicted = np.asarray(model(rv), dtype=float)
+        predicted = np.asarray(counted(rv), dtype=float)
         if predicted.shape != flux.shape or not np.isfinite(predicted).all():
             raise ValueError("RV model must return finite flux with the observed shape.")
         return float(np.sum((flux - continuum * predicted)**2 / variance))
@@ -162,13 +200,28 @@ def recover_rv(
         band_width_m_s = C_M_S * float(np.log(edges[-1] / edges[0]))
         n_probes = max(n_probes, int(np.ceil(PROBES_PER_BAND_WIDTH * (search_max_m_s - search_min_m_s)
                                              / band_width_m_s)) + 1)
+    span = search_max_m_s - search_min_m_s
+    if 3 * n_probes + int(grid_size) + reserved > max_evaluations:
+        raise RVSearchBudgetError(
+            f"RV search over [{search_min_m_s:g}, {search_max_m_s:g}] m/s needs at least "
+            f"{3 * n_probes + int(grid_size) + reserved} model evaluations ({n_probes} correlation-scale probes, "
+            f"{int(grid_size)} grid nodes, refinement), above max_evaluations={max_evaluations}. "
+            "Narrow the search interval or raise max_evaluations.")
     probes = np.linspace(search_min_m_s + inset, search_max_m_s - inset, n_probes)
-    scales = np.array([velocity_correlation_scale(model, float(v), variance, continuum) for v in probes])
+    scales = np.array([velocity_correlation_scale(counted, float(v), variance, continuum) for v in probes])
     scales = scales[np.isfinite(scales) & (scales > 0)]
     scale = float(scales.min()) if scales.size else float("nan")
     if np.isfinite(scale) and scale > 0:
-        needed = int(np.ceil((search_max_m_s - search_min_m_s) / (GRID_STEP_PER_CORRELATION_SCALE * scale))) + 1
-        grid_size = max(int(grid_size), needed)
+        # Compare in floating point first: a vanishing scale must not overflow int().
+        needed = np.ceil(span / (GRID_STEP_PER_CORRELATION_SCALE * scale)) + 1
+        if calls[0] + max(needed, grid_size) + reserved > max_evaluations:
+            raise RVSearchBudgetError(
+                f"RV search over [{search_min_m_s:g}, {search_max_m_s:g}] m/s needs {needed:.4g} grid nodes at the "
+                f"template's velocity correlation scale of {scale:.4g} m/s, above max_evaluations={max_evaluations} "
+                f"({calls[0]} already used by the scale probes). Narrow the search interval around the expected RV "
+                "(the budget covers about max_evaluations x scale / 2 m/s), raise max_evaluations, or check that "
+                "the template and band carry resolvable RV structure.")
+        grid_size = max(int(grid_size), int(needed))
     velocities = np.linspace(search_min_m_s, search_max_m_s, grid_size)
     chi2 = np.array([objective(float(rv)) for rv in velocities])
 
@@ -180,17 +233,17 @@ def recover_rv(
     candidates = [(float(velocities[i]), float(chi2[i])) for i in local]
     for index in local:
         lower, upper = velocities[max(0, index - 1)], velocities[min(grid_size - 1, index + 1)]
-        optimum = minimize_scalar(objective, bounds=(float(lower), float(upper)),
-                                  method="bounded", options={"xatol": 1e-5})
+        optimum = minimize_scalar(objective, bounds=(float(lower), float(upper)), method="bounded",
+                                  options={"xatol": 1e-5, "maxiter": REFINEMENT_MAX_ITERATIONS})
         if not optimum.success:
             raise RuntimeError(f"RV minimization failed: {optimum.message}")
         candidates.append((float(optimum.x), float(optimum.fun)))
     rv, minimum = min(candidates, key=lambda item: item[1])
-    sigma = rv_uncertainty(model, rv, variance, continuum)
+    sigma = rv_uncertainty(counted, rv, variance, continuum)
     if not np.isfinite(sigma):
         raise ValueError("Spectrum carries no RV information: check source photons and template absorption structure.")
     # A best fit within one Fisher sigma of an edge is a truncated inference.
     boundary_margin = max(1.0, sigma)
     at_boundary = bool(min(rv - search_min_m_s, search_max_m_s - rv) <= boundary_margin)
     reduced_chi2 = minimum / max(flux.size - 1, 1)
-    return RVResult(rv, sigma, velocities, chi2, minimum, at_boundary, reduced_chi2)
+    return RVResult(rv, sigma, velocities, chi2, minimum, at_boundary, reduced_chi2, calls[0])

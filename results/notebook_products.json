@@ -1,0 +1,30 @@
+{
+  "run_id": "a4372b255329484cbf5810e0055d45a3",
+  "products_sha256": {
+    "figures/core_design_map.pdf": "d2e092bf5635f82a54ead0d99d0b4aeef8507c2ef40d2c11342a776aa260f083",
+    "figures/core_design_map.png": "3c4066c901d9b453a6aa263e1801f7a100fb6ce767de99922f81ffab3ea11bbb",
+    "figures/coupling_sensitivity.pdf": "3bdabea524f5989116308f167e4204c2735bd7263269b225973e65a4c002c12f",
+    "figures/coupling_sensitivity.png": "59e27b83201b0783fd67dcc401decb5ebcdf51ed18bf77a3d53ccad682fa560b",
+    "figures/field_overlap.pdf": "ce453f3079aa437f1facb6526628aa085cdd686912afac7ad7a2b189132c9cac",
+    "figures/field_overlap.png": "b8d1c5273f20eee02c451bc4e2d321ee2d3f3ac0218a3d6926ba950c6eb34424",
+    "figures/rv_port_trade.pdf": "42674922611dbb8fc5326442d358b674ed51e9ef628321d92a233e2be60fd0a8",
+    "figures/rv_port_trade.png": "682b2725d632a286e3dc1540b7f4c5450b367dece4cb8a9fe7711b5bc4ecd861",
+    "figures/rv_recovery.pdf": "c92f254c1e7f53bfce955714545e679c2590904dda1ee4697345f1f7128a885f",
+    "figures/rv_recovery.png": "595a3caba803d97893ebd3ba020baf0e415928be663fe32b5d7458ea873d93eb",
+    "figures/synthetic_observation.pdf": "eef192f27c119ddd6e8a82c1f7fae97d5d5bebd804e538927e1e5db0c6d8e093",
+    "figures/synthetic_observation.png": "84551fcaf9dfa5061a6c9f7c47daee6f538c940ef565df504896c1889e129278",
+    "figures/system_overview.pdf": "9e638396f8aad2135a08dd3e7796f0b02d3939bb07fa2060bf6d94901cb63002",
+    "figures/system_overview.png": "2b339b6726defd00b2f6f16e72aca86fcb7e20ba6e726cf6c76c944e7a2819e7",
+    "figures/wavefront_psf.pdf": "35ee964522e39356dd255b907f0e30808f35d4296245ecd088d1af70d6db1846",
+    "figures/wavefront_psf.png": "3ce1c9abf8475158914392acf6253a4b792aa1239353e078accf3c6f8408719c",
+    "figures/wavelength_seeing.pdf": "0c570cca97c20cdb763772ca2980381fce1fdfde4dab49745c235c99f052ba10",
+    "figures/wavelength_seeing.png": "1e5f350948d4a11adce880ddd6df1e4f10b02a55bad11b32b8d3f6fd07a66b3e",
+    "results/design_map.npz": "21e7adadd235ab17165ac68354236c0832d17c8a0c76bdc353c8b1b74032e230",
+    "results/parameter_provenance.json": "6bcbfd6e0c3d339c3e6b5a7bc043bfae89edb271b4a1800a1ccb97ce8a66aa58",
+    "results/port_trade.json": "ae824bb57deb039457f93b55161d07fb4081e05a3a37c0ff96874c7df9e86df4",
+    "results/showcase_baseline/arrays.npz": "6e6b35796429129f4a3f70f4fb537138207749789cea05e134c2a5bc52dd3c6f",
+    "results/showcase_baseline/spectrum.csv": "2f3e7a7e7456dfa2fa4714dabc070438beb69f8bf5b3b5ab9f5499c3c3e71d05",
+    "results/showcase_baseline/summary.json": "4e98756ab3d1bfe3f3a9f1a09291c2c07752243b5cbaa7343ffa5a9a19d22107",
+    "results/showcase_metrics.json": "5f9a86d4380700ef1d8bc1ec2fd991c7b29e042d9e8a39b1234ca140b5940463"
+  }
+}

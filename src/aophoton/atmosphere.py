@@ -54,24 +54,39 @@ def von_karman_opd(
     return phase_rad * lambda_m / (2 * np.pi)
 
 
-def remove_piston_tiptilt(opd_m: NDArray[np.floating], pupil: Pupil) -> NDArray[np.float64]:
-    """Remove a least-squares plane in OPD [m] over illuminated pupil pixels.
+def _plane_design(pupil: Pupil) -> NDArray[np.float64]:
+    mask = pupil.mask
+    return np.column_stack((np.ones(mask.sum()), pupil.x_m[mask], pupil.y_m[mask]))
 
-    The fit is weighted by intensity transmission. Pixels outside the pupil
-    are set to zero. Removed pointing is represented separately by the
-    propagation function's ``tip_tilt_mas`` argument.
+
+def piston_tiptilt(opd_m: NDArray[np.floating], pupil: Pupil) -> NDArray[np.float64]:
+    """Least-squares plane (piston [m], x slope, y slope [m/m]) of an OPD over
+    illuminated pupil pixels, weighted by the open-area fraction.
+
+    A slope s moves the image by s radians, the pointing the wavefront
+    itself imposes on top of any explicit ``tip_tilt_mas``.
     """
     opd = np.asarray(opd_m, dtype=float)
     if opd.shape != pupil.amplitude.shape or not np.all(np.isfinite(opd)):
         raise ValueError("opd_m must be finite and match the pupil shape")
     mask = pupil.mask
-    design = np.column_stack((np.ones(mask.sum()), pupil.x_m[mask], pupil.y_m[mask]))
-    sqrt_weight = pupil.amplitude[mask]
-    coefficients = np.linalg.lstsq(
-        design * sqrt_weight[:, None], opd[mask] * sqrt_weight, rcond=None
-    )[0]
+    sqrt_weight = np.sqrt(pupil.amplitude[mask])
+    return np.linalg.lstsq(_plane_design(pupil) * sqrt_weight[:, None], opd[mask] * sqrt_weight, rcond=None)[0]
+
+
+def remove_piston_tiptilt(opd_m: NDArray[np.floating], pupil: Pupil) -> NDArray[np.float64]:
+    """Remove a least-squares plane in OPD [m] over illuminated pupil pixels.
+
+    The fit (``piston_tiptilt``) is weighted by intensity transmission, the
+    open-area fraction. Pixels outside the pupil are set to zero. Removed
+    pointing is represented separately by the propagation function's
+    ``tip_tilt_mas`` argument.
+    """
+    coefficients = piston_tiptilt(opd_m, pupil)
+    opd = np.asarray(opd_m, dtype=float)
+    mask = pupil.mask
     result = np.zeros_like(opd)
-    result[mask] = opd[mask] - design @ coefficients
+    result[mask] = opd[mask] - _plane_design(pupil) @ coefficients
     return result
 
 
@@ -108,7 +123,7 @@ def make_ao_residual(
     opd = remove_piston_tiptilt(von_karman_opd(
         pupil, seeing_arcsec, rng, outer_scale_m=outer_scale_m
     ), pupil)
-    weight = pupil.amplitude**2
+    weight = pupil.amplitude
     current_rms = np.sqrt(np.sum(weight * opd**2) / np.sum(weight))
     if current_rms <= np.finfo(float).tiny:
         raise ValueError("phase screen has zero residual variance")

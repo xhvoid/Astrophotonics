@@ -7,9 +7,17 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.sparse import csr_matrix
 
+from .atmosphere import piston_tiptilt
 from .pupil import Pupil
 
 RAD_TO_MAS = 180 * 3600 * 1000 / np.pi
+# Largest net tip-tilt per axis (OPD plane plus pointing), as a fraction of the
+# periodic focal field's half-width lambda / (2 pupil pixel) = (n_pix / 2)
+# lambda / D. Beyond it the image's wings wrap round the FFT field: at half the
+# half-width a 32-pixel pupil puts 0.5% of the power on the far side that a
+# field 4x wider does not, and near the edge the core itself wraps to the
+# opposite sign.
+MAX_TILT_FIELD_FRACTION = 0.5
 
 
 @dataclass(frozen=True)
@@ -57,6 +65,13 @@ def propagate(
     be drawn externally and its *intensities or coupled powers* averaged.
     The FFT convention makes positive x tilt move the image toward +x.
     Zero-padding increases angular sampling without adding pupil information.
+    The focal field is periodic with half-width lambda / (2 pupil pixel), set
+    by ``n_pix`` alone.  The image moves with the net tilt: the OPD's
+    least-squares plane over the illuminated pupil (``piston_tiptilt``) plus
+    ``tip_tilt_mas``, however the two share it.  A net tilt beyond
+    ``MAX_TILT_FIELD_FRACTION`` of the half-width on either axis is rejected
+    rather than wrapped; the check reads the OPD, which is propagated
+    unchanged, higher-order aberrations included.
     """
     opd = np.asarray(opd_m, dtype=float)
     if opd.shape != pupil.amplitude.shape or not np.all(np.isfinite(opd)):
@@ -69,9 +84,17 @@ def propagate(
     if tilt.shape != (2,) or not np.all(np.isfinite(tilt)):
         raise ValueError("tip_tilt_mas must contain two finite displacements")
     lambda_m = wavelength_um * 1e-6
-    angular_nyquist_mas = lambda_m / (2 * pupil.pixel_scale_m) * RAD_TO_MAS
-    if np.any(np.abs(tilt) >= angular_nyquist_mas):
-        raise ValueError("tip-tilt exceeds the sampled angular Nyquist limit")
+    half_field_mas = lambda_m / (2 * pupil.pixel_scale_m) * RAD_TO_MAS
+    limit_mas = MAX_TILT_FIELD_FRACTION * half_field_mas
+    wavefront_tilt = piston_tiptilt(opd, pupil)[1:] * RAD_TO_MAS
+    net = wavefront_tilt + tilt
+    if np.any(np.abs(net) > limit_mas):
+        raise ValueError(
+            f"net tip-tilt ({net[0]:.6g}, {net[1]:.6g}) mas (OPD plane ({wavefront_tilt[0]:.6g}, "
+            f"{wavefront_tilt[1]:.6g}) + pointing ({tilt[0]:.6g}, {tilt[1]:.6g})) exceeds {limit_mas:.6g} mas per "
+            f"axis, half the periodic focal field's half-width at {wavelength_um:g} um ({half_field_mas:.6g} mas = "
+            "n_pix/2 lambda/D); the image would wrap round the FFT field. Increase telescope.n_pix (pad_factor "
+            "does not widen the field).")
     ramp_m = (tilt[0] * pupil.x_m + tilt[1] * pupil.y_m) / RAD_TO_MAS
     entrance = pupil.amplitude * np.exp(2j * np.pi * (opd + ramp_m) / lambda_m)
     entrance /= np.sqrt(np.sum(pupil.amplitude**2))

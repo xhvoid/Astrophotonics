@@ -1,8 +1,19 @@
 {
   "baseline": {
     "disclaimer": "This is an independent conceptual study and is not an official ESO instrument model.",
+    "run_identity_sha256": "88ca5b418b3ea0db836fc1ac3180293ca2fcb28262dbc738835902fa9a300b46",
+    "noise_mode": "noisy",
     "seed": 2026,
     "feed": "smf",
+    "template": {
+      "source": "synthetic",
+      "generator": "aophoton.spectrum.synthetic_spectrum",
+      "wavelength_min_um": 1.5350000000000001,
+      "wavelength_max_um": 1.575,
+      "seed": 7,
+      "samples": 50000,
+      "samples_sha256": "d9e48e900155c66fac6757a07340735b9bd2e94515361507e585abb3b97addcb"
+    },
     "residual_wfe_nm": 150.00000000000003,
     "measured_strehl": 0.6597629205129092,
     "marechal_without_jitter": 0.6925663699482779,
@@ -11,19 +22,159 @@
     "mean_lantern_coupling": 0.47723054324771136,
     "mean_selected_coupling": 0.47114978961268245,
     "collecting_area_m2": 9.536484375,
+    "median_snr_per_spectral_sample": 144.06412037925725,
+    "detector_pixels_per_spectral_sample": 4,
+    "snr_definition": "Expected source electrons / sqrt(forecast variance) per extracted spectral sample: one detector-pixel-wide wavelength bin summed over 4 spatial extraction pixel(s) in each of 1 independently read channel(s), 4 physical pixels in all. Not per physical detector pixel.",
     "median_snr_per_pixel": 144.06412037925725,
     "injected_rv_m_s": 2300.0,
-    "recovered_rv_m_s": 2296.374196331586,
-    "recovery_bias_m_s": -3.625803668413937,
-    "estimated_rv_uncertainty_m_s": 4.115534338736836,
+    "recovered_rv_m_s": 2298.0042572738175,
+    "recovery_bias_m_s": -1.9957427261824705,
+    "estimated_rv_uncertainty_m_s": 4.111499673845247,
     "rv_at_search_boundary": false,
-    "rv_reduced_chi2": 0.9622294688396336,
-    "validation": "Synthetic only; no OOPAO or observational validation"
+    "rv_reduced_chi2": 0.9636550259773732,
+    "rv_model_evaluations": 147,
+    "validation": "Synthetic only; no OOPAO or observational validation",
+    "field_descriptions": {
+      "noise_mode": "noisy: one seeded Poisson/read-noise draw; noiseless: expected counts with the same forecast variance (injection/recovery check)",
+      "run_identity_sha256": "SHA-256 of the configuration, noise mode and template record; replayable with `aophoton replay`",
+      "template": "Template source; a file is identified by the SHA-256 of its bytes, a synthetic template by its generator inputs; samples_sha256 covers the samples used",
+      "median_snr_per_spectral_sample": "Median over the band of snr_per_spectral_sample (see snr_definition)",
+      "median_snr_per_pixel": "Deprecated alias of median_snr_per_spectral_sample, kept for compatibility; it is not per physical detector pixel",
+      "estimated_rv_uncertainty_m_s": "Fisher 1-sigma forecast from the expected spectrum [m/s]",
+      "recovery_bias_m_s": "Recovered minus injected RV of this single realization [m/s]; not an ensemble bias",
+      "collecting_area_m2": "Geometric clear pupil area [m^2]",
+      "spectrum_csv_columns": "Columns of spectrum.csv, in order"
+    },
+    "spectrum_csv_columns": {
+      "wavelength_um": "Geometric-centre wavelength of the detector pixel [um]",
+      "expected_source_e": "Expected source electrons per extracted spectral sample",
+      "background_subtracted_noisy_e": "Background-subtracted electrons of the single seeded noisy draw (Poisson source, dark and background; Gaussian read noise)",
+      "variance_e2": "Forecast variance per extracted spectral sample [e^2]: source, dark, background and read noise of every summed pixel",
+      "snr_per_spectral_sample": "Expected source electrons / sqrt(forecast variance) per extracted spectral sample: one detector-pixel-wide wavelength bin summed over 4 spatial extraction pixel(s) in each of 1 independently read channel(s), 4 physical pixels in all. Not per physical detector pixel.",
+      "coupling": "Feed coupling efficiency, interpolated from the optical wavelength nodes"
+    }
+  },
+  "run_configuration": {
+    "seed": 2026,
+    "telescope": {
+      "diameter_m": 3.6,
+      "obscuration": 0.25,
+      "spider_width_m": 0.0,
+      "n_pix": 128,
+      "pad_factor": 4
+    },
+    "ao": {
+      "wavelength_um": 1.555,
+      "seeing_arcsec": 0.8,
+      "reference_seeing_arcsec": 0.8,
+      "residual_wfe_nm": 150.0,
+      "outer_scale_m": 25.0,
+      "tip_tilt_rms_mas": 10.0,
+      "n_frames": 12,
+      "wavelength_nodes": 3
+    },
+    "fibre": {
+      "mode_radius_mas": 57.0,
+      "few_mode_count": 6,
+      "lantern_ports": 6,
+      "lantern_transmission": 0.9,
+      "feed": "smf"
+    },
+    "spectrograph": {
+      "wavelength_min_um": 1.54,
+      "wavelength_max_um": 1.57,
+      "resolving_power": 100000.0,
+      "pixels_per_resolution_element": 3.0,
+      "oversample": 4,
+      "throughput": 0.15,
+      "rv_padding_m_s": 30000.0
+    },
+    "detector": {
+      "exposure_s": 300.0,
+      "continuum_photons_s_m2_um": 20000000.0,
+      "read_noise_e": 5.0,
+      "dark_current_e_s": 0.01,
+      "background_e_s_pixel": 0.05,
+      "extraction_pixels": 4
+    },
+    "observation": {
+      "injected_rv_m_s": 2300.0,
+      "rv_search_half_width_m_s": 10000.0,
+      "template_path": null,
+      "template_seed": 7
+    }
+  },
+  "fixed_sweep_parameters": {
+    "wfe_cases_nm": [
+      0,
+      150,
+      400
+    ],
+    "wfe_grid_nm": [
+      0.0,
+      75.0,
+      150.0,
+      225.0,
+      300.0,
+      400.0,
+      500.0
+    ],
+    "jitter_grid_mas": [
+      0.0,
+      10.0,
+      20.0,
+      30.0,
+      40.0,
+      50.0,
+      60.0
+    ],
+    "ports": [
+      1,
+      3,
+      6,
+      10,
+      15
+    ],
+    "sweep_frames": 12,
+    "brightness_scales": [
+      1.0,
+      0.01
+    ],
+    "wavelength_scan_um": [
+      1.2,
+      1.275,
+      1.35,
+      1.425,
+      1.5,
+      1.575,
+      1.65,
+      1.725,
+      1.8
+    ],
+    "seeing_scan_arcsec": [
+      0.5,
+      0.65,
+      0.8,
+      1.0,
+      1.2
+    ],
+    "mixture_um": [
+      1.54,
+      1.555,
+      1.57
+    ],
+    "phase_seed_range": [
+      610,
+      621
+    ],
+    "pointing_seed": 810,
+    "strehl_case_seed": 401,
+    "outer_scale_m": 25.0
   },
   "conclusions": [
     "At zero jitter, increasing residual WFE from 0 to 500 nm changes mean SMF coupling from 0.699 to 0.020; wavefront quality sets the photon budget.",
     "At 150 nm WFE, increasing per-axis jitter from 0 to 40 mas changes SMF coupling from 0.489 to 0.249; injection stability remains important even at fixed AO residual.",
-    "At 400 nm WFE / 10 mas jitter, replacing the SMF with a 15-port lantern changes forecast \u03c3RV from 12.98 to 8.75 m/s at baseline brightness, but from 403.84 to 502.86 m/s at 1/100 brightness. Under the assumed insertion loss and extraction noise, detector costs can reverse the throughput advantage."
+    "At 400 nm WFE / 10 mas jitter, replacing the SMF with a 15-port lantern changes forecast \u03c3RV from 12.96 to 8.74 m/s at baseline brightness, but from 403.15 to 502.00 m/s at 0.01 \u00d7 brightness. Under the assumed insertion loss and extraction noise, detector costs can reverse the throughput advantage."
   ],
   "strehl_cases": [
     [
@@ -80,5 +231,5 @@
     0.4159246783858889,
     0.34559371837211605
   ],
-  "notebook_runtime_s": 15.618141083978117
+  "notebook_runtime_s": 15.737910750322044
 }

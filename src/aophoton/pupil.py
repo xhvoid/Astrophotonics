@@ -13,6 +13,10 @@ class Pupil:
 
     ``pixel_scale_m`` is the pupil sampling, not the focal-plane sampling.
     ``diameter_m`` describes the outer aperture before obscuration and spiders.
+    ``amplitude`` is each pixel's open-area fraction: the pixel average of the
+    aperture function, which is the field the FFT propagates. Photons are
+    collected over ``clear_area_m2``; the sampled field's power is the smaller
+    ``sampled_power_fraction`` of that wherever a pixel is partly covered.
     """
 
     amplitude: NDArray[np.float64]
@@ -26,6 +30,22 @@ class Pupil:
         """Pixels with nonzero amplitude transmission."""
         return self.amplitude > 0
 
+    @property
+    def clear_area_m2(self) -> float:
+        """Geometric open area [m^2] that collects photons: sum(t) * pixel area."""
+        return float(np.sum(self.amplitude) * self.pixel_scale_m**2)
+
+    @property
+    def sampled_power_fraction(self) -> float:
+        """sum(t^2) / sum(t): power of the sampled pupil field per collected photon.
+
+        Exactly 1 for a binary pupil. A partly covered pixel transmits t of
+        the light falling on it, but its pixel-averaged field carries only
+        t^2. Coupling efficiencies normalised to the sampled field are
+        multiplied by this factor to refer them to the collected photons.
+        """
+        return float(np.sum(self.amplitude**2) / np.sum(self.amplitude))
+
 
 def make_pupil(
     n_pix: int = 128,
@@ -36,9 +56,13 @@ def make_pupil(
     """Make an annular aperture with optional horizontal/vertical spiders.
 
     ``obscuration`` is the central-to-outer *diameter* ratio. Spiders are two
-    orthogonal opaque bars of full width ``spider_width_m``. Integer-centred
-    samples align the optical axis with the FFT origin. Binary edge sampling
-    introduces the usual finite-grid pupil discretization error.
+    orthogonal opaque bars of full width ``spider_width_m`` through the centre.
+    Integer-centred samples align the optical axis with the FFT origin. Each
+    pixel's spider transmission is its exact uncovered area fraction,
+    (1 - c_x)(1 - c_y) for covered fractions c_x, c_y of its width and height,
+    so vanes narrower than a pixel remove their true area instead of a whole
+    row and column. The circular edges keep binary sampling, with the usual
+    finite-grid discretization error.
     """
     if not isinstance(n_pix, Integral) or isinstance(n_pix, bool) or n_pix < 8:
         raise ValueError("n_pix must be an integer >= 8")
@@ -52,11 +76,16 @@ def make_pupil(
     axis = (np.arange(n_pix, dtype=float) - n_pix // 2) * pixel_scale
     x_m, y_m = np.meshgrid(axis, axis)
     radius = np.hypot(x_m, y_m)
-    aperture = (radius < diameter_m / 2) & (radius >= obscuration * diameter_m / 2)
+    aperture = ((radius < diameter_m / 2) & (radius >= obscuration * diameter_m / 2)).astype(float)
     if spider_width_m > 0:
-        aperture &= (np.abs(x_m) >= spider_width_m / 2) & (
-            np.abs(y_m) >= spider_width_m / 2
-        )
+        open_fraction = 1.0 - _covered_fraction(axis, spider_width_m, pixel_scale)
+        aperture *= open_fraction[None, :] * open_fraction[:, None]
     if np.count_nonzero(aperture) < 4:
         raise ValueError("aperture contains too few illuminated pixels")
-    return Pupil(aperture.astype(float), x_m, y_m, pixel_scale, float(diameter_m))
+    return Pupil(aperture, x_m, y_m, pixel_scale, float(diameter_m))
+
+
+def _covered_fraction(centres: NDArray[np.float64], width: float, pixel: float) -> NDArray[np.float64]:
+    """Fraction of each pixel [c - pixel/2, c + pixel/2] inside the bar |u| < width/2."""
+    overlap = np.minimum(centres + pixel / 2, width / 2) - np.maximum(centres - pixel / 2, -width / 2)
+    return np.clip(overlap / pixel, 0.0, 1.0)

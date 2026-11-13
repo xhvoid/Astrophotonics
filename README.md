@@ -39,7 +39,9 @@ The engineering question is what a photonic feed demands before hardware exists:
 ## Reproduced results
 
 <!-- BEGIN GENERATED RESULTS -->
-**Validation: 79 tests passed; all 12 notebook code cells executed without errors; 9 PNG/PDF figure pairs exported.** The last complete notebook execution took 32.1 seconds on the validation machine (Python 3.14.3; CPU only). Runtime varies by machine.
+**Validation: 217 tests passed; all 12 notebook code cells executed without errors; 9 PNG/PDF figure pairs exported.** The last complete notebook execution took 17.8 seconds on the validation machine (Python 3.14.3; CPU only). Runtime varies by machine.
+
+Baseline: 3.6 m pupil, 1.540–1.570 µm band (AO reference 1.555 µm), R = 100,000, smf feed, noisy detector draw.
 
 | Baseline quantity | Synthetic result |
 |---|---:|
@@ -47,20 +49,20 @@ The engineering question is what a photonic feed demands before hardware exists:
 | Measured ensemble Strehl (with jitter) | 0.6598 |
 | Maréchal cross-check (without jitter) | 0.6926 |
 | Mean SMF coupling across band | 0.4711 |
-| Mean ideal six-mode acceptance | 0.5303 |
-| Mean six-port lantern coupling, after 90% transmission | 0.4772 |
-| Median SNR per detector pixel | 144.06 |
+| Mean ideal 6-mode acceptance | 0.5303 |
+| Mean 6-port lantern coupling, after 90% transmission | 0.4772 |
+| Median SNR per extracted spectral sample (4 detector pixels) | 144.06 |
 | Injected RV | 2300.00 m/s |
-| Recovered RV | 2296.37 m/s |
-| Recovery error | -3.63 m/s |
-| Conditional RV uncertainty (1σ) | 4.12 m/s |
-| RV fit reduced χ² (≈1 when model and variance describe the data) | 0.962 |
+| Recovered RV | 2298.00 m/s |
+| Recovery error | -2.00 m/s |
+| Conditional RV uncertainty (1σ) | 4.11 m/s |
+| RV fit reduced χ² (≈1 when model and variance describe the data) | 0.964 |
 
 1. At zero jitter, increasing residual WFE from 0 to 500 nm changes mean SMF coupling from 0.699 to 0.020; wavefront quality sets the photon budget.
 
 2. At 150 nm WFE, increasing per-axis jitter from 0 to 40 mas changes SMF coupling from 0.489 to 0.249; injection stability remains important even at fixed AO residual.
 
-3. At 400 nm WFE / 10 mas jitter, replacing the SMF with a 15-port lantern changes forecast σRV from 12.98 to 8.75 m/s at baseline brightness, but from 403.84 to 502.86 m/s at 1/100 brightness. Under the assumed insertion loss and extraction noise, detector costs can reverse the throughput advantage.
+3. At 400 nm WFE / 10 mas jitter, replacing the SMF with a 15-port lantern changes forecast σRV from 12.96 to 8.74 m/s at baseline brightness, but from 403.15 to 502.00 m/s at 0.01 × brightness. Under the assumed insertion loss and extraction noise, detector costs can reverse the throughput advantage.
 <!-- END GENERATED RESULTS -->
 
 These RV errors are conditional statistical forecasts with an exact template and calibration. They are not predicted NIRPS or ANDES accuracy. A single noisy recovery error does not establish an estimator's ensemble bias.
@@ -93,7 +95,8 @@ flat = np.zeros_like(pupil.amplitude)
 mode = gaussian_mode(propagate(pupil, flat, 1.555, t.pad_factor), f.mode_radius_mas)
 for offset_mas in (0, 10, 20, 30, 40, 60):
     focal = propagate(pupil, flat, 1.555, t.pad_factor, (offset_mas, 0.0))
-    print(offset_mas, round(overlap_efficiency(focal.field, mode), 3))
+    coupling = pupil.sampled_power_fraction * overlap_efficiency(focal.field, mode)
+    print(offset_mas, round(coupling, 3))
 # 0 0.699 · 10 0.679 · 20 0.623 · 30 0.538 · 40 0.435 · 60 0.226
 ```
 
@@ -113,14 +116,18 @@ aophoton simulate --config configs/baseline.yaml
 python scripts/run_tests.py
 ```
 
-The CLI writes `results/baseline/summary.json`, `spectrum.csv`, and `arrays.npz`. The JSON includes the full configuration, every setting's provenance, package versions, Strehl/coupling/SNR and RV results. The CSV includes expected and noisy electrons, their variance, SNR, and wavelength-dependent coupling.
+The CLI writes `results/baseline/summary.json`, `spectrum.csv`, and `arrays.npz`. The JSON includes the full configuration, every setting's provenance, Python and package versions, Strehl/coupling/SNR and RV results. It also records the noise mode, the template's source and SHA-256, and a run identity, with a description of each field and CSV column. The CSV holds expected electrons, the background-subtracted signal (`background_subtracted_noisy_e`, or `background_subtracted_expected_e` with `--no-noise`), its variance, the SNR and the wavelength-dependent coupling. SNR is per extracted spectral sample: one pixel-wide wavelength bin summed over the extraction pixels of every read channel (4 physical pixels for the SMF baseline), not per physical detector pixel.
 
 For just the simulation, use `pip install -e .`; FITS support is optional through `.[fits]`. `.[dev]` includes tests, FITS and notebook execution. No downloads are performed by the simulation or notebook.
 
 ```bash
 # Synthetic zero-noise validation, with a separate output directory:
 aophoton simulate --config configs/baseline.yaml --no-noise --output results/noiseless
+# Rerun a saved summary (same configuration, noise mode and template bytes) and check it reproduces:
+aophoton replay --summary results/noiseless/summary.json --output results/noiseless_replay
 ```
+
+Replay compares every scientific result in the summary (couplings of all three feeds, Strehl, SNR, RV, its uncertainty, χ² and the search-boundary flag) before it writes anything. A mismatch names each differing field, exits 1 and leaves both the reference and the destination unchanged; a matching replay into the reference's own directory leaves it as recorded.
 
 Edit [baseline.yaml](configs/baseline.yaml) to change seeing, WFE, jitter, wavelength, resolution, source brightness or detector terms. Set `fibre.feed` to `smf`, `few_mode`, or `lantern`; configure `lantern_ports` for its spatial capacity. Unknown configuration keys fail explicitly. Imported template paths are relative to the YAML file; formats and observational caveats are described in [public_data.md](docs/public_data.md).
 

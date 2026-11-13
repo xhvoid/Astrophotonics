@@ -116,9 +116,19 @@ class SimulationConfig:
 def load_config(path: str | Path) -> SimulationConfig:
     """Read YAML, reject misspelled/unknown keys, and resolve template paths."""
     path = Path(path).resolve()
-    raw = yaml.safe_load(path.read_text())
+    return config_from_dict(yaml.safe_load(path.read_text()), path.parent)
+
+
+def config_from_dict(raw: Any, base_directory: str | Path | None = None) -> SimulationConfig:
+    """Build a configuration from a mapping with the same strict rules as YAML.
+
+    ``asdict(config)`` round-trips, so a saved ``summary.json`` configuration
+    rebuilds its run. A relative template path resolves against
+    ``base_directory`` (the YAML file's folder); absolute paths are kept.
+    """
     if not isinstance(raw, dict):
         raise ValueError("Configuration must be a YAML mapping")
+    base = Path.cwd() if base_directory is None else Path(base_directory)
     known = {f.name for f in fields(SimulationConfig)}
     unknown = set(raw) - known
     if unknown:
@@ -132,7 +142,7 @@ def load_config(path: str | Path) -> SimulationConfig:
         if not isinstance(data, dict) or set(data) - {f.name for f in fields(cls)}:
             raise ValueError(f"Unknown keys or invalid mapping in {group}")
         if group == "observation" and data.get("template_path") is not None:
-            data["template_path"] = str((path.parent / data["template_path"]).resolve())
+            data = dict(data, template_path=str((base / data["template_path"]).resolve()))
         kwargs[group] = cls(**data)
     return SimulationConfig(seed=raw.get("seed", 2026), **kwargs)
 

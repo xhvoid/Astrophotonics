@@ -68,16 +68,25 @@ def mode_basis(focal: FocalPlane, mode_radius_mas: float, n_modes: int) -> NDArr
 
 
 def _validated_basis(basis: ArrayLike) -> NDArray:
-    """Validate discrete orthonormality without altering supplied mode samples."""
+    """Validate discrete orthonormality; return the samples as float64/complex128.
+
+    Boolean and integer samples are converted before the Gram matrix is
+    formed: in their own dtype a product saturates (bool) or overflows
+    (int8), and a non-normalised basis could pass. Values are unchanged.
+    """
     accepted = np.asarray(basis)
     if accepted.ndim != 3 or accepted.shape[0] == 0:
         raise ValueError("basis must have shape (n_modes, ny, nx)")
+    if accepted.dtype != bool and not np.issubdtype(accepted.dtype, np.number):
+        raise ValueError(f"basis must hold real or complex numbers, not {accepted.dtype}")
+    accepted = accepted.astype(np.complex128 if np.iscomplexobj(accepted) else np.float64)
     if not np.all(np.isfinite(accepted)):
         raise ValueError("basis must be finite")
     flattened = accepted.reshape(accepted.shape[0], -1)
     gram = flattened.conj() @ flattened.T
-    if not np.allclose(gram, np.eye(len(accepted)), rtol=0, atol=1e-9):
-        raise ValueError("basis must be orthonormal on the discrete grid")
+    deviation = float(np.max(np.abs(gram - np.eye(len(accepted)))))
+    if deviation > 1e-9:
+        raise ValueError(f"basis must be orthonormal on the discrete grid (max |Gram - I| = {deviation:.3g})")
     return accepted
 
 

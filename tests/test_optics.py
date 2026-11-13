@@ -1,8 +1,12 @@
 """Scientific checks of diffraction, PSD normalization, and modal projection."""
 
+from dataclasses import replace
+from pathlib import Path
+
 import numpy as np
 import pytest
-from scipy.special import j1
+from scipy.integrate import quad
+from scipy.special import erf, j1
 
 from aophoton.atmosphere import (
     ARCSEC_TO_RAD,
@@ -13,8 +17,12 @@ from aophoton.atmosphere import (
 from aophoton.coupling import gaussian_mode, overlap_efficiency
 from aophoton.lantern import ModeProjector, lantern_efficiency, modal_coupling, mode_basis
 from aophoton.metrics import marechal_strehl, rms_wfe_nm, strehl_ratio
-from aophoton.propagation import RAD_TO_MAS, polychromatic_psf, propagate
+from aophoton.propagation import MAX_TILT_FIELD_FRACTION, RAD_TO_MAS, polychromatic_psf, propagate
 from aophoton.pupil import make_pupil
+from aophoton.config import load_config
+from aophoton.simulation import simulate_optics
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_unobscured_psf_matches_airy_profile():
@@ -119,6 +127,75 @@ def test_tip_tilt_sign_and_single_mode_loss():
     assert strehl_ratio(shifted.intensity, reference.intensity) == pytest.approx(1, abs=2e-14)
 
 
+def test_tilt_that_would_wrap_round_the_fft_field_is_refused():
+    # 32 px at 1.55 um: the periodic field spans +/-1421 mas. A +1415 mas tilt
+    # used to pass and put the peak at -1421 mas, with 55% of the power at x < 0.
+    small, large = make_pupil(n_pix=32), make_pupil(n_pix=128)
+    with pytest.raises(ValueError, match="wrap round the FFT field. Increase telescope.n_pix"):
+        propagate(small, np.zeros_like(small.amplitude), 1.55, 4, (1415.0, 0.0))
+    with pytest.raises(ValueError, match="per axis"):
+        propagate(small, np.zeros_like(small.amplitude), 1.55, 4, (0.0, -1415.0))
+    half_field = 1.55e-6 / (2 * small.pixel_scale_m) * RAD_TO_MAS
+    tilt = MAX_TILT_FIELD_FRACTION * half_field          # largest accepted tilt
+    # A 4x wider field with the same angular pixel scale shows the unwrapped image.
+    wrapped = propagate(small, np.zeros_like(small.amplitude), 1.55, 4, (tilt, 0.0))
+    reference = propagate(large, np.zeros_like(large.amplitude), 1.55, 4, (tilt, 0.0))
+    assert wrapped.pixel_scale_mas == pytest.approx(reference.pixel_scale_mas, rel=1e-12)
+
+    def signed_peak_and_far_power(focal):
+        row, column = np.unravel_index(np.argmax(focal.intensity), focal.intensity.shape)
+        return focal.axis_mas[column], focal.intensity[:, focal.axis_mas < 0].sum()
+
+    peak, far = signed_peak_and_far_power(wrapped)
+    reference_peak, reference_far = signed_peak_and_far_power(reference)
+    assert peak == pytest.approx(reference_peak, abs=1e-9) and peak > 0
+    # Wrapped wings add ~0.5% of the power to the far half-plane at the limit
+    # (1.08% -> 1.61%); the coarser 32 px pupil itself accounts for ~0.1%.
+    assert abs(far - reference_far) < 0.01
+    # Pointing well inside the limit is propagated exactly as before.
+    inside = propagate(small, np.zeros_like(small.amplitude), 1.55, 4, (0.3 * half_field, -0.2 * half_field))
+    assert inside.intensity.sum() == pytest.approx(1, abs=2e-14)
+
+
+def test_tilt_carried_by_the_opd_is_guarded_like_explicit_pointing():
+    # The same +1415.38 mas x tilt as an OPD ramp, as pointing, or split between
+    # them over a residual aberration.  At 32 px (limit 710.47 mas) the OPD
+    # route used to pass and put the peak at -1420.94 mas with 55% of the power
+    # at x < 0, while equal and opposite contributions were refused.
+    tilt, wavelength_um, pad = 1415.38, 1.55, 4
+    small, large = make_pupil(n_pix=32, diameter_m=3.6), make_pupil(n_pix=128, diameter_m=3.6)
+
+    def ramp(pupil, mas):
+        return pupil.x_m * mas / RAD_TO_MAS
+
+    zero = np.zeros_like(small.amplitude)
+    residual = make_ao_residual(small, 150, np.random.default_rng(5))       # tip-tilt removed
+    for opd, pointing in ((ramp(small, tilt), (0.0, 0.0)), (zero, (tilt, 0.0)),
+                          (0.6 * ramp(small, tilt) + residual, (0.4 * tilt, 0.0))):
+        with pytest.raises(ValueError, match="wrap round the FFT field. Increase telescope.n_pix"):
+            propagate(small, opd, wavelength_um, pad, pointing)
+    flat = propagate(small, zero, wavelength_um, pad)
+    cancelled = propagate(small, -ramp(small, tilt), wavelength_um, pad, (tilt, 0.0))
+    np.testing.assert_allclose(cancelled.intensity, flat.intensity, rtol=0, atol=1e-12 * flat.intensity.max())
+    # 128 px at the same angular pixel scale: both encodings give one PSF, peaked
+    # on the +x side at the grid sample nearest the tilt (+1420.94 mas).
+    zero = np.zeros_like(large.amplitude)
+    by_opd = propagate(large, ramp(large, tilt), wavelength_um, pad)
+    by_pointing = propagate(large, zero, wavelength_um, pad, (tilt, 0.0))
+    assert by_opd.pixel_scale_mas == pytest.approx(flat.pixel_scale_mas, rel=1e-12)
+    for focal in (by_opd, by_pointing):
+        np.testing.assert_allclose(focal.intensity, by_pointing.intensity, rtol=0, atol=1e-12 * focal.intensity.max())
+        row, column = np.unravel_index(np.argmax(focal.intensity), focal.intensity.shape)
+        assert focal.axis_mas[column] == pytest.approx(1420.94, abs=0.01) and row == focal.axis_mas.size // 2
+        assert focal.intensity[:, focal.axis_mas < 0].sum() < 0.01
+    # A split tilt keeps the residual aberration it is carried with.
+    residual = make_ao_residual(large, 150, np.random.default_rng(5))
+    split = propagate(large, 0.6 * ramp(large, tilt) + residual, wavelength_um, pad, (0.4 * tilt, 0.0))
+    whole = propagate(large, ramp(large, tilt) + residual, wavelength_um, pad)
+    np.testing.assert_allclose(split.intensity, whole.intensity, rtol=0, atol=1e-12 * whole.intensity.max())
+    assert strehl_ratio(split.intensity, by_opd.intensity) < 0.95
+
+
 def test_normalized_complex_overlap_and_ensemble_degradation():
     pupil = make_pupil(n_pix=64)
     reference = propagate(pupil, np.zeros_like(pupil.amplitude), 1.55, 4)
@@ -172,6 +249,36 @@ def test_reusable_projector_matches_projection_and_owns_its_basis():
         projector.powers(np.ones((2, 2)))
 
 
+@pytest.mark.parametrize("basis", [
+    np.array([[[True, True], [False, False]]]),                 # norm^2 = 2, saturated to True in bool
+    np.array([[[16, 1], [0, 0]]], dtype=np.int8),               # norm^2 = 257, wraps to 1 in int8
+], ids=["bool", "int8"])
+def test_non_normalised_basis_fails_in_any_sample_dtype(basis):
+    field = np.eye(2)
+    with pytest.raises(ValueError, match="orthonormal"):
+        modal_coupling(field, basis)
+    with pytest.raises(ValueError, match="orthonormal"):
+        ModeProjector(basis)
+    with pytest.raises(ValueError, match="numbers"):
+        modal_coupling(field, np.array([[["a", "b"], ["c", "d"]]]))
+
+
+def test_normalised_real_and_complex_bases_keep_their_powers():
+    field = np.array([[1.0, 2.0j], [0.0, -1.0]])
+    power = np.vdot(field, field).real
+    delta = np.array([[[1, 0], [0, 0]], [[0, 1], [0, 0]]])         # integer pixel modes
+    expected = np.abs(field.ravel()[:2])**2 / power
+    for basis in (delta, delta.astype(bool), delta.astype(float)):
+        np.testing.assert_allclose(modal_coupling(field, basis), expected, rtol=0, atol=1e-15)
+        np.testing.assert_allclose(ModeProjector(basis).powers(field), expected, rtol=0, atol=1e-15)
+    # A complex, phase-rotated orthonormal pair spanning the first row.
+    rotated = np.array([[[1, 1j], [0, 0]], [[1, -1j], [0, 0]]]) * np.exp(0.7j) / np.sqrt(2)
+    rotated_expected = np.abs(rotated.reshape(2, -1).conj() @ field.ravel())**2 / power
+    np.testing.assert_allclose(modal_coupling(field, rotated), rotated_expected, rtol=0, atol=1e-15)
+    np.testing.assert_allclose(ModeProjector(rotated).powers(field), rotated_expected, rtol=0, atol=1e-15)
+    assert modal_coupling(field, rotated).sum() == pytest.approx(expected.sum(), abs=1e-15)
+
+
 def test_polychromatic_flux_and_explicit_crop_loss():
     pupil = make_pupil(n_pix=48)
     zero = np.zeros_like(pupil.amplitude)
@@ -184,6 +291,92 @@ def test_polychromatic_flux_and_explicit_crop_loss():
     cropped = polychromatic_psf(pupil, zero, [1.50, 1.55, 1.60], axis_mas=mono.axis_mas[centre - 2:centre + 3])
     assert 0 < cropped.intensity.sum() < 0.8
     assert np.all(cropped.intensity >= 0)
+
+
+def _vane_integral(width_m, inner_radius_m, outer_radius_m, profile):
+    """Integral of profile(x) * g(x) over the vertical vane |x| < w/2 inside the
+    annulus, where g(x) is the y-integral that ``profile`` returns as a pair
+    (x-weight, callable of the y-limits)."""
+    def integrand(x):
+        high = np.sqrt(outer_radius_m**2 - x * x)
+        low = np.sqrt(max(inner_radius_m**2 - x * x, 0.0))
+        weight, along = profile(x)
+        return weight * 2 * (along(high) - along(low))
+    return quad(integrand, -width_m / 2, width_m / 2, epsabs=0, epsrel=1e-12)[0]
+
+
+def _continuous_vane_coupling(width_m, wavelength_um=1.555, mode_radius_mas=57.0,
+                              outer_radius_m=1.8, inner_radius_m=0.45):
+    """Flat-wavefront SMF coupling of an annulus with crossed vanes, computed in
+    the pupil plane without sampling: eta = |int_P u|^2 / (A_P int |u|^2),
+    with the fibre mode back-propagated to u = exp(-a r^2). Valid while the
+    vanes miss the central overlap, i.e. w < sqrt(2) * inner radius."""
+    a = (np.pi * (mode_radius_mas / RAD_TO_MAS) / (wavelength_um * 1e-6))**2
+    gaussian = lambda x: (np.exp(-a * x * x), lambda y: 0.5 * np.sqrt(np.pi / a) * erf(np.sqrt(a) * y))
+    flat = lambda x: (1.0, lambda y: y)
+    blocked = 2 * _vane_integral(width_m, inner_radius_m, outer_radius_m, gaussian)
+    blocked_area = 2 * _vane_integral(width_m, inner_radius_m, outer_radius_m, flat)
+    field = np.pi / a * (np.exp(-a * inner_radius_m**2) - np.exp(-a * outer_radius_m**2)) - blocked
+    area = np.pi * (outer_radius_m**2 - inner_radius_m**2) - blocked_area
+    return field**2 / (area * np.pi / (2 * a)), area
+
+
+@pytest.mark.parametrize("width_m", [0.001, 0.3])
+def test_spider_removes_its_geometric_area(width_m):
+    # A 1 mm crossed spider on a clear 3.6 m pupil blocks 0.007199 m^2. Masking
+    # every pixel whose centre lay within the vane removed 0.772 m^2 at 32 px.
+    exact = 8 * quad(lambda x: np.sqrt(1.8**2 - x * x), 0, width_m / 2)[0] - width_m**2
+    errors = []
+    for n_pix in (32, 64, 128):
+        clear, vaned = make_pupil(n_pix, 3.6, 0), make_pupil(n_pix, 3.6, 0, width_m)
+        removed = clear.clear_area_m2 - vaned.clear_area_m2
+        errors.append(abs(removed / exact - 1))
+        # Only the binary outer edge is approximated: the vane's chord is
+        # sampled to one pixel, a relative error up to pixel / diameter.
+        assert errors[-1] < 1.05 / n_pix
+    assert errors[0] > errors[1] > errors[2]
+    pupil = make_pupil(32, 3.6, 0, 0.001)
+    centre = 16
+    assert pupil.amplitude[5, centre] == pytest.approx(1 - 0.001 / pupil.pixel_scale_m, rel=1e-12)
+    assert pupil.amplitude[centre, centre] == pytest.approx((1 - 0.001 / pupil.pixel_scale_m)**2, rel=1e-12)
+    assert make_pupil(32, 3.6, 0).sampled_power_fraction == 1.0
+
+
+@pytest.mark.parametrize("width_m", [0.001, 0.01, 0.06])
+def test_spider_coupling_change_matches_continuous_pupil_overlap(width_m):
+    expected = _continuous_vane_coupling(width_m)[0] / _continuous_vane_coupling(0.0)[0] - 1
+    changes = []
+    for n_pix in (64, 128):
+        clear, vaned = make_pupil(n_pix, 3.6, 0.25), make_pupil(n_pix, 3.6, 0.25, width_m)
+        overlaps = []
+        for pupil in (clear, vaned):
+            focal = propagate(pupil, np.zeros_like(pupil.amplitude), 1.555, 4)
+            overlaps.append(overlap_efficiency(focal.field, gaussian_mode(focal, 57.0)))
+        changes.append(overlaps[1] * vaned.sampled_power_fraction / overlaps[0] - 1)
+        # The diffraction response converges at O(pixel / diameter), like the area.
+        assert changes[-1] == pytest.approx(expected, rel=3.0 / n_pix)
+        if width_m < vaned.pixel_scale_m:
+            # A sub-pixel vane is all partial coverage: without referring the
+            # sampled overlap to the collected photons, over half its
+            # coupling loss would be missed.
+            assert abs(overlaps[1] / overlaps[0] - 1 - expected) > 0.4 * abs(expected)
+    assert abs(changes[1] - expected) < abs(changes[0] - expected)
+
+
+def test_simulation_collects_over_the_clear_area():
+    config = load_config(ROOT / "configs/baseline.yaml")
+    config = replace(config, telescope=replace(config.telescope, n_pix=32, spider_width_m=0.03),
+                     ao=replace(config.ao, n_frames=1, residual_wfe_nm=0.0, tip_tilt_rms_mas=0.0, wavelength_nodes=2))
+    optics = simulate_optics(config)
+    pupil = make_pupil(32, config.telescope.diameter_m, config.telescope.obscuration, 0.03)
+    assert optics.collecting_area_m2 == pytest.approx(pupil.clear_area_m2, rel=1e-15)
+    focal = propagate(pupil, np.zeros_like(pupil.amplitude), optics.wavelengths_um[0], config.telescope.pad_factor)
+    raw = overlap_efficiency(focal.field, gaussian_mode(focal, config.fibre.mode_radius_mas))
+    assert optics.smf_efficiency[0] == pytest.approx(raw * pupil.sampled_power_fraction, rel=1e-12)
+    # Coupled photons per unit flux: geometric area x photon-referred overlap
+    # equals the sampled-field power x the sampled overlap.
+    sampled_power = np.sum(pupil.amplitude**2) * pupil.pixel_scale_m**2
+    assert optics.collecting_area_m2 * optics.smf_efficiency[0] == pytest.approx(sampled_power * raw, rel=1e-12)
 
 
 @pytest.mark.parametrize("kwargs", [{"n_pix": 7}, {"obscuration": 1}, {"diameter_m": 0}, {"spider_width_m": -1}])

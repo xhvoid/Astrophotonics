@@ -7,11 +7,14 @@ from .pupil import Pupil
 
 
 def rms_wfe_nm(opd_m: ArrayLike, pupil: Pupil) -> float:
-    """Intensity-weighted, piston-removed pupil RMS optical path error [nm]."""
+    """Intensity-weighted, piston-removed pupil RMS optical path error [nm].
+
+    Each pixel is weighted by the light it transmits, its open-area fraction.
+    """
     opd = np.asarray(opd_m, dtype=float)
     if opd.shape != pupil.amplitude.shape or not np.all(np.isfinite(opd)):
         raise ValueError("opd_m must be finite and match the pupil shape")
-    weight = pupil.amplitude**2
+    weight = pupil.amplitude
     mean = np.sum(weight * opd) / np.sum(weight)
     return float(1e9 * np.sqrt(np.sum(weight * (opd - mean)**2) / np.sum(weight)))
 

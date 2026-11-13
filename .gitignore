@@ -12,3 +12,6 @@ results/baseline/
 
 .ipython/
 .jupyter_runtime/
+results/.publication.lock
+results/.pytest_run.lock
+results/failed_executions/

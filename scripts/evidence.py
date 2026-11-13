@@ -9,19 +9,27 @@ the current tree before trusting the record.
 
 from __future__ import annotations
 
+from fnmatch import fnmatchcase
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import shutil
+import tempfile
 from typing import Any
 
 NOTEBOOK = "notebooks/eso_astrophotonics_showcase.ipynb"
 RECORD = "results/notebook_execution.json"
 JUNIT = "results/pytest.xml"
 TEST_RECORD = "results/pytest_record.json"
+# Written by every successful publication: the products notebook runs own and
+# may therefore later replace or retire.  Other files under results/ and figures/
+# (a user's own scan or notes) are not products and are never touched.
+OWNERSHIP = "results/notebook_products.json"
 # The implementation a run must have imported (relative to the project root).
 IMPORT_TARGET = "src/aophoton/__init__.py"
-# Files the notebook writes and the documentation updater (or a reader) consumes.
+# Where notebook products may live.  Matching a pattern does not make a file a
+# product: ownership comes only from OWNERSHIP (see ``owned_products``).
 PRODUCT_PATTERNS = (
     "results/showcase_metrics.json", "results/design_map.npz", "results/port_trade.json",
     "results/parameter_provenance.json", "results/showcase_baseline/*",
@@ -38,8 +46,49 @@ REQUIRED_PRODUCTS = (
     "results/showcase_baseline/spectrum.csv", "results/showcase_baseline/arrays.npz",
     *(f"figures/{name}.{suffix}" for name in FIGURE_NAMES for suffix in ("png", "pdf")),
 )
-# Environment variable through which tests/conftest.py reports the imported module.
-IMPORT_RECORD_ENV = "AOPHOTON_IMPORT_RECORD"
+# Environment variable through which tests/conftest.py reports the imported
+# module, the selected test IDs and their outcomes.
+SESSION_RECORD_ENV = "AOPHOTON_SESSION_RECORD"
+# The pytest configuration that defines the intended suite (testpaths, options).
+PYTEST_CONFIG = "pyproject.toml"
+# Environment variables through which a caller can change which tests run.
+PYTEST_SELECTION_ENV = ("PYTEST_ADDOPTS", "PYTEST_PLUGINS")
+# Permission bits for new files written by ``atomic_write`` (mkstemp creates them 0600).
+_UMASK = os.umask(0)
+os.umask(_UMASK)
+
+
+def atomic_write(target: Path, fill, like: Path | None = None) -> None:
+    """Put what ``fill(stream)`` writes at ``target`` with one atomic rename.
+
+    The temporary file is created exclusively (``mkstemp``: a fresh random name,
+    opened with O_EXCL, so it never follows or reuses an existing file or link)
+    in the destination directory, and only that file is removed if anything
+    fails, leaving the previous ``target`` as it was.  The rename replaces the
+    directory entry itself, so a symbolic link at ``target`` is replaced, not
+    written through.  Mode and times are copied from ``like``, or the mode
+    follows the umask.
+    """
+    target = Path(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".publish-tmp", dir=target.parent)
+    temporary = Path(name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            fill(stream)
+        if like is None:
+            os.chmod(temporary, 0o666 & ~_UMASK)
+        else:
+            shutil.copystat(like, temporary)
+        os.replace(temporary, target)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def collection_digest(node_ids) -> str:
+    """SHA-256 over a set of pytest node IDs (order-independent)."""
+    return hashlib.sha256("\n".join(sorted(node_ids)).encode()).hexdigest()
 
 
 def file_digest(path: Path) -> str:
@@ -102,11 +151,64 @@ def inputs_digest(root: Path) -> str:
     return digest.hexdigest()
 
 
-def product_digests(root: Path) -> dict[str, str]:
-    """``{relative path: SHA-256}`` of every current notebook result product."""
+def product_paths(root: Path) -> list[str]:
+    """Relative paths of every file in the product locations, whether or not a
+    notebook run wrote it.  Lists names only: no file content is read, so an
+    unrelated user file's size or read permission cannot affect the caller."""
     root = Path(root)
     files = {p for pattern in PRODUCT_PATTERNS for p in root.glob(pattern) if p.is_file()}
-    return {p.relative_to(root).as_posix(): file_digest(p) for p in sorted(files)}
+    return sorted(p.relative_to(root).as_posix() for p in files)
+
+
+def product_digests(root: Path) -> dict[str, str]:
+    """``{relative path: SHA-256}`` of every file in the product locations.
+    Reads them all: meant for a staging directory a run filled itself."""
+    return {relative: file_digest(Path(root) / relative) for relative in product_paths(root)}
+
+
+def is_product_path(relative: str) -> bool:
+    """Whether a project-relative POSIX path lies in a product location.
+
+    Matched component by component, so ``figures/*.png`` covers neither
+    ``figures/sub/x.png`` nor anything outside the project.
+    """
+    path = PurePosixPath(relative)
+    if path.is_absolute() or ".." in path.parts:
+        return False
+    return any(len(path.parts) == len(PurePosixPath(pattern).parts)
+               and all(fnmatchcase(part, glob) for part, glob in zip(path.parts, PurePosixPath(pattern).parts))
+               for pattern in PRODUCT_PATTERNS)
+
+
+def _read_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def owned_products(root: Path) -> dict[str, str]:
+    """``{relative path: SHA-256 it was written with}`` for the products an
+    earlier notebook publication demonstrably wrote.
+
+    Read from the ownership manifest.  A tree published before manifests existed
+    falls back to the products of its *passing* execution record, which that
+    publisher made exactly the staged set.  An unreadable manifest, a legacy
+    record that did not pass, or neither file means nothing is owned, so nothing
+    will be retired.  Entries outside the product locations are ignored.
+    """
+    root = Path(root)
+    if (root / OWNERSHIP).exists():
+        data = _read_json(root / OWNERSHIP)
+    else:
+        data = _read_json(root / RECORD)
+        if not isinstance(data, dict) or data.get("status") != "passed":
+            data = None
+    products = data.get("products_sha256") if isinstance(data, dict) else None
+    if not isinstance(products, dict):
+        return {}
+    return {path: digest for path, digest in products.items()
+            if isinstance(path, str) and isinstance(digest, str) and is_product_path(path)}
 
 
 def local_import_env(root: Path, base: dict[str, str] | None = None) -> dict[str, str]:
@@ -139,20 +241,31 @@ def _check_common(record: dict, root: Path, rerun: str) -> None:
 
 
 def verified_test_record(root: Path) -> dict:
-    """Return the pytest record only if it passed and still matches the current tree.
+    """Return the pytest record only if it certifies the full suite of the current tree.
 
-    Raises ``RuntimeError`` for a failed run; when the package source, the
-    configuration inputs, the tests/scripts or ``pytest.xml`` changed after the
-    recorded run; or when that run imported ``aophoton`` from elsewhere.
+    Raises ``RuntimeError`` for a failed run; for a partial run (a selection of
+    the intended collection, however small or large); for a record that does
+    not bind its collection; when the package source, the configuration inputs,
+    the tests/scripts, the pytest configuration or ``pytest.xml`` changed after
+    the recorded run; or when that run imported ``aophoton`` from elsewhere.
     """
     root = Path(root)
     path = root / TEST_RECORD
     if not path.exists():
         raise RuntimeError("No pytest record; run scripts/run_tests.py.")
     record = json.loads(path.read_text())
+    if record.get("status") == "partial":
+        raise RuntimeError(
+            f"Last test run was partial: it ran {record.get('tests')} tests where the project configuration "
+            f"collects {record.get('intended_tests')} (PYTEST_ADDOPTS={record.get('pytest_addopts')!r}), so it "
+            "cannot certify the full suite; rerun scripts/run_tests.py without test-selection options.")
     if record.get("status") != "passed":
         raise RuntimeError(f"Last test run did not pass (status={record.get('status')!r}).")
     _check_common(record, root, "scripts/run_tests.py")
+    if not record.get("collection_sha256") or record.get("tests") != record.get("intended_tests"):
+        raise RuntimeError("The pytest record does not bind the intended test collection; rerun scripts/run_tests.py.")
+    if record.get("pytest_config_sha256") != file_digest(root / PYTEST_CONFIG):
+        raise RuntimeError(f"{PYTEST_CONFIG} changed since the recorded test run; rerun scripts/run_tests.py.")
     if record.get("tests_sha256") != tests_digest(root):
         raise RuntimeError("Tests or scripts changed since the recorded test run; rerun scripts/run_tests.py.")
     if not (root / JUNIT).exists() or record.get("junit_sha256") != file_digest(root / JUNIT):
@@ -175,18 +288,31 @@ def notebook_problems(notebook: Any) -> list[str]:
     return problems
 
 
+def write_json(path: Path, data: Any) -> None:
+    """Replace ``path`` with ``data`` as indented JSON.
+
+    Written by ``atomic_write``: a symbolic link at ``path`` is replaced by a
+    regular file, never written through, and a failed write leaves the
+    previous file in place.
+    """
+    text = json.dumps(data, indent=2) + "\n"
+    atomic_write(Path(path), lambda stream: stream.write(text.encode()))
+
+
 def write_record(root: Path, record: dict) -> None:
-    """Replace the execution record (the previous evidence is always discarded)."""
-    (Path(root) / RECORD).write_text(json.dumps(record, indent=2) + "\n")
+    """Replace the execution record (the previous evidence is always discarded) via ``write_json``."""
+    write_json(Path(root) / RECORD, record)
 
 
 def verified_record(root: Path) -> dict:
     """Return the execution record only if it still describes the current files.
 
     Raises ``RuntimeError`` when the last run did not pass; when the notebook,
-    package source, configuration inputs or any result product changed after
-    that run; when the run imported ``aophoton`` from elsewhere; or when the
-    saved notebook itself does not show a clean execution.
+    package source, configuration inputs or any product that run wrote changed
+    (or disappeared) after it; when the run imported ``aophoton`` from
+    elsewhere; or when the saved notebook itself does not show a clean execution.
+    Other files in the product locations are not products of the run: they
+    neither invalidate the record nor are vouched for by it (``unowned_files``).
     """
     import nbformat
 
@@ -197,13 +323,20 @@ def verified_record(root: Path) -> dict:
     if record.get("notebook_sha256") != file_digest(root / NOTEBOOK):
         raise RuntimeError("Notebook changed since its recorded passing execution; rerun execute_showcase.py.")
     _check_common(record, root, "execute_showcase.py")
-    missing = sorted(set(REQUIRED_PRODUCTS) - set(record.get("products_sha256") or {}))
+    recorded = record.get("products_sha256") or {}
+    missing = sorted(set(REQUIRED_PRODUCTS) - set(recorded))
     if missing:
         raise RuntimeError(f"The recorded notebook execution did not produce {missing}; rerun execute_showcase.py.")
-    if record.get("products_sha256") != product_digests(root):
+    current = {relative: file_digest(root / relative) for relative in recorded if (root / relative).is_file()}
+    if current != recorded:
         raise RuntimeError("Result products (results/, figures/) changed since the recorded notebook "
                            "execution; rerun execute_showcase.py.")
     problems = notebook_problems(nbformat.read(root / NOTEBOOK, as_version=4))
     if problems:
         raise RuntimeError("Saved notebook is not a clean execution: " + "; ".join(problems))
     return record
+
+
+def unowned_files(root: Path, record: dict) -> list[str]:
+    """Files in the product locations that ``record``'s run did not write (names only, never read)."""
+    return sorted(set(product_paths(root)) - set(record.get("products_sha256") or {}))

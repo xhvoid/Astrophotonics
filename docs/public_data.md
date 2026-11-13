@@ -48,7 +48,7 @@ transformations: []
 |---|---|
 | ASCII | Exactly two numeric columns: wavelength in µm, then dimensionless relative flux. `.csv` files use commas; other non-FITS files use whitespace. Use `#` for optional comment/header lines. |
 | FITS binary table | Scalar-sample columns named exactly `WAVELENGTH` and `FLUX`. The wavelength column must have an explicit `TUNIT` convertible to length in µm. Flux units must be dimensionless or absent. |
-| FITS primary image | A one-dimensional flux array and a linear wavelength axis with `CTYPE1='WAVE'`, `CRVAL1`, `CDELT1`, `CRPIX1`, and length-valued `CUNIT1`. `BUNIT` must be dimensionless or absent. |
+| FITS primary image | A one-dimensional flux array and a linear vacuum-wavelength axis with `CTYPE1='WAVE'`, `CRVAL1`, `CRPIX1` and length-valued `CUNIT1`. The pixel step is `CD1_1`, or `PC1_1 × CDELT1` (FITS WCS Paper I; `PC1_1` defaults to 1, and `CDELT1` to 1 when `PC1_1` is given). Headers the linear model cannot represent are refused, not ignored: `CD1_1` with `PC1_1`, `WCSAXES` ≠ 1, cross or extra-axis `PCi_j`/`CDi_j`, `PV1_m`/`PS1_m`, distortion keywords, `WAVE-xxx` algorithms and air wavelengths (`AWAV`). Only the primary description is read; alternate descriptions (keywords ending in a version letter, such as `PC1_1A`) are ignored. `BUNIT` must be dimensionless or absent. |
 
 FITS import requires the optional dependency:
 

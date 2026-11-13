@@ -33,7 +33,7 @@ and the [technical note](../docs/technical_note.md) explain the scope.
 ''')
 code('''
 from pathlib import Path
-from dataclasses import replace
+from dataclasses import asdict, replace
 from IPython.display import display, Markdown, HTML
 import json, time
 import numpy as np
@@ -120,6 +120,7 @@ table([(r['parameter'], r['value'], r['status']) for r in records], ['Parameter 
 (RESULTS / 'parameter_provenance.json').write_text(json.dumps(records, indent=2) + '\\n')
 t = cfg.telescope
 pupil = make_pupil(t.n_pix, t.diameter_m, t.obscuration, t.spider_width_m)
+sampled_power_fraction = pupil.sampled_power_fraction
 reference = propagate(pupil, np.zeros_like(pupil.amplitude), cfg.ao.wavelength_um, t.pad_factor)
 ''')
 md(r'''
@@ -140,7 +141,7 @@ code('''
 wfe_cases = [0, 150, 400]
 case_fields, case_opds, strehl_rows = [], [], []
 for wfe in wfe_cases:
-    opd = make_ao_residual(pupil, wfe, np.random.default_rng(401))
+    opd = make_ao_residual(pupil, wfe, np.random.default_rng(401), outer_scale_m=cfg.ao.outer_scale_m)
     focal = propagate(pupil, opd, cfg.ao.wavelength_um, t.pad_factor)
     measured = strehl_ratio(focal.intensity, reference.intensity)
     case_fields.append(focal); case_opds.append(opd)
@@ -167,18 +168,21 @@ table([(w, f'{s:.4f}', f'{m:.4f}') for w,s,m in strehl_rows], ['Residual WFE [nm
 md(r'''
 ## 4. Complex-field coupling
 
-The Gaussian fundamental is $E_f\propto\exp[-r^2/w^2]$, with $w=57$ mas the
-**1/e field radius** (equivalent angular mode-field diameter 114 mas).
+The Gaussian fundamental is $E_f\propto\exp[-r^2/w^2]$, with $w$ the configured
+**1/e field radius** (`fibre.mode_radius_mas`; the angular mode-field diameter is $2w$).
 Coupling uses the complex overlap, including phase:
 
 $$\eta=\frac{|\sum E E_f^*|^2}{\sum|E|^2\sum|E_f|^2}.$$
 
 A uniform pixel-area factor cancels. An intensity-only overlap would lose essential
-phase information. The mode radius is held fixed in angular units throughout this
+phase information. To express coupling per photon collected by the clear pupil,
+we multiply each sampled-field overlap power by $\sum P^2 / \sum P$, where $P$
+is each pupil pixel's open-area fraction. The mode radius is held fixed in angular units throughout this
 small wavelength interval, an assumed achromatic injection relay.
 ''')
 code('''
 focal = case_fields[1]
+display(Markdown(f'Mode radius $w$ = {cfg.fibre.mode_radius_mas:g} mas (mode-field diameter {2*cfg.fibre.mode_radius_mas:g} mas).'))
 mode = gaussian_mode(focal, cfg.fibre.mode_radius_mas)
 mode = mode / np.sqrt(np.sum(np.abs(mode)**2))
 fig, axes = plt.subplots(1, 3, figsize=(12, 3.7), layout='constrained')
@@ -190,31 +194,35 @@ for ax, (data,title,cmap,limits) in zip(axes,data_items):
     im = ax.imshow(data[np.ix_(crop,crop)], origin='lower',extent=angular_extent,cmap=cmap,**kwargs)
     ax.set(title=title,xlabel='Angle x [mas]',ylabel='Angle y [mas]'); ax.grid(False)
     fig.colorbar(im, ax=ax, label='Phase [rad]' if limits else 'Relative intensity', shrink=0.85)
-fig.suptitle(f'Complex overlap at 150 nm WFE: η = {overlap_efficiency(focal.field,mode):.3f}')
+fig.suptitle(f'Complex overlap at {wfe_cases[1]} nm WFE: η = {sampled_power_fraction * overlap_efficiency(focal.field,mode):.3f}')
 export(fig, 'field_overlap')
 ''')
 md('''
 ## 5. Core design map and lantern trade
 
 The sweep uses common random wavefront shapes and pointing draws to compare designs
-with lower Monte Carlo scatter. Each cell averages 12 independent realizations;
-this is an ensemble without a physical cadence. Jitter means **RMS per axis**.
+with lower Monte Carlo scatter. Each cell averages `sweep_frames` independent
+realizations (a fixed sweep parameter, shown in the figure title); this is an
+ensemble without a physical cadence. Jitter means **RMS per axis**.
 
 The few-mode/lantern model projects onto orthonormal Hermite-Gaussian functions,
 an ideal parabolic-index guide approximation. Complete mode groups of 1, 3, 6, 10,
 and 15 avoid selecting only one orientation in a degenerate group. Port counts refer
-to scalar spatial modes with polarization effects omitted. A 90% assumed lantern
-transmission follows the projection. This predicts accepted total power, not
-individual port illumination, taper losses, or real fibre cutoffs.
+to scalar spatial modes with polarization effects omitted. The configured, assumed
+lantern transmission (`fibre.lantern_transmission`) follows the projection. This
+predicts accepted total power, not individual port illumination, taper losses, or
+real fibre cutoffs.
 ''')
 code('''
 wfe_grid = np.array([0, 75, 150, 225, 300, 400, 500], dtype=float)
 jitter_grid = np.array([0, 10, 20, 30, 40, 50, 60], dtype=float)
 ports = np.array([1,3,6,10,15])
 sweep_frames = 12
-basis = mode_basis(reference, cfg.fibre.mode_radius_mas, int(ports.max()))
+few_modes = cfg.fibre.few_mode_count
+basis = mode_basis(reference, cfg.fibre.mode_radius_mas, int(max(ports.max(), few_modes)))
 projector = ModeProjector(basis)  # validate the fixed orthonormal subspace once
-unit_opds = [make_ao_residual(pupil, 1.0, np.random.default_rng(610+i)) for i in range(sweep_frames)]
+unit_opds = [make_ao_residual(pupil, 1.0, np.random.default_rng(610+i), outer_scale_m=cfg.ao.outer_scale_m)
+             for i in range(sweep_frames)]
 tilt_draws = np.random.default_rng(810).normal(size=(sweep_frames,2))
 modal_map = np.zeros((len(wfe_grid), len(jitter_grid), len(basis)))
 smf_samples = np.zeros((len(wfe_grid), len(jitter_grid), sweep_frames))
@@ -225,29 +233,34 @@ for iw, wfe in enumerate(wfe_grid):
         for iframe, unit_opd in enumerate(unit_opds):
             field = propagate(pupil, unit_opd*wfe, cfg.ao.wavelength_um, t.pad_factor,
                               tuple(tilt_draws[iframe]*jitter))
-            powers = projector.powers(field.field)
+            powers = sampled_power_fraction * projector.powers(field.field)
             modal_map[iw,ij] += powers / sweep_frames
             smf_samples[iw,ij,iframe] = powers[0]
             if ij == 0: mean_zero_jitter_psf += field.intensity / sweep_frames
     strehl_grid[iw] = strehl_ratio(mean_zero_jitter_psf, reference.intensity)
 eta_map = modal_map[:,:,0]
+# At zero WFE and zero jitter the coupled area is independent of which
+# normalization is used for the focal field.
+sampled_area = np.sum(pupil.amplitude**2) * pupil.pixel_scale_m**2
+np.testing.assert_allclose(eta_map[0,0] * pupil.clear_area_m2,
+                           sampled_area * overlap_efficiency(reference.field, basis[0]), rtol=1e-12, atol=0)
 eta_sem = smf_samples.std(axis=2,ddof=1)/np.sqrt(sweep_frames)
 fig, axes = plt.subplots(1,2,figsize=(12,4.7),layout='constrained')
 im = axes[0].pcolormesh(jitter_grid,wfe_grid,eta_map,shading='nearest',cmap='viridis',vmin=0,vmax=0.8)
 contours = axes[0].contour(jitter_grid,wfe_grid,eta_map,levels=[0.1,0.3,0.5],colors='white',linewidths=0.9)
 axes[0].clabel(contours,fmt='%.1f',fontsize=9)
-axes[0].set(xlabel='Tip-tilt RMS per axis [mas]',ylabel='Residual WFE at 0.8 arcsec seeing [nm]',title='SMF: both wavefront and pointing matter')
+axes[0].set(xlabel='Tip-tilt RMS per axis [mas]',ylabel=f'Residual WFE at {cfg.ao.reference_seeing_arcsec:g} arcsec seeing [nm]',title='SMF: both wavefront and pointing matter')
 axes[0].grid(False)
 axes[0].set(xlim=(0,60),ylim=(0,500))
 fig.colorbar(im,ax=axes[0],label='Mean complex-field coupling η')
 for n in ports:
     accepted = modal_map[:,1,:n].sum(axis=1)
     transmission = 1.0 if n == 1 else cfg.fibre.lantern_transmission
-    axes[1].plot(wfe_grid,transmission*accepted,'o-',label='SMF' if n==1 else f'Lantern {n} ports')
-axes[1].plot(wfe_grid,modal_map[:,1,:6].sum(axis=1),'k--',label='Ideal few-mode fibre (6 modes)')
-axes[1].set(xlabel='Residual WFE [nm]',ylabel='Accepted / incident power',ylim=(0,1),title='Mode capacity at 10 mas per-axis jitter')
+    axes[1].plot(wfe_grid,transmission*accepted,'o-',label='SMF' if n==1 else f'Lantern {n} ports, × {transmission:g}')
+axes[1].plot(wfe_grid,modal_map[:,1,:few_modes].sum(axis=1),'k--',label=f'Ideal few-mode fibre ({few_modes} modes)')
+axes[1].set(xlabel='Residual WFE [nm]',ylabel='Accepted / incident power',ylim=(0,1),title=f'Mode capacity at {jitter_grid[1]:g} mas per-axis jitter')
 axes[1].legend(fontsize=9)
-fig.suptitle('AO and photonic input trade space | 1.555 µm, 3.6 m pupil, 12 realizations per cell')
+fig.suptitle(f'AO and photonic input trade space | {cfg.ao.wavelength_um:.3f} µm, {t.diameter_m:g} m pupil, {sweep_frames} realizations per cell')
 export(fig, 'core_design_map')
 np.savez_compressed(RESULTS/'design_map.npz',wfe_nm=wfe_grid,jitter_mas=jitter_grid,modal_power=modal_map,
                     smf_sem=eta_sem,strehl=strehl_grid,ports=ports)
@@ -261,7 +274,7 @@ for iw in [0,2,5]:
     axes[1].errorbar(jitter_grid,eta_map[iw],yerr=eta_sem[iw],marker='o',capsize=2,label=f'{wfe_grid[iw]:.0f} nm WFE')
 axes[1].set(xlabel='Tip-tilt RMS per axis [mas]',ylabel='SMF coupling η',title='Pointing sensitivity (±1 SEM)'); axes[1].legend(fontsize=9)
 axes[2].plot(strehl_grid,eta_map[:,0],'o-',label='No jitter')
-axes[2].plot(strehl_grid,eta_map[:,3],'s-',label='30 mas per axis')
+axes[2].plot(strehl_grid,eta_map[:,3],'s-',label=f'{jitter_grid[3]:g} mas per axis')
 axes[2].set(xlabel='Measured Strehl before jitter',ylabel='SMF coupling η',title='Strehl alone does not fix coupling'); axes[2].legend(fontsize=9)
 export(fig,'coupling_sensitivity')
 ''')
@@ -278,21 +291,23 @@ wavelengths = np.linspace(1.2,1.8,9)
 seeing_values = np.array([0.5,0.65,0.8,1.0,1.2])
 wave_eta, seeing_eta = [], []
 for wave in wavelengths:
-    samples = [overlap_efficiency((fp:=propagate(pupil,u*150,wave,t.pad_factor)).field,
+    samples = [overlap_efficiency((fp:=propagate(pupil,u*wfe_cases[1],wave,t.pad_factor)).field,
                                   gaussian_mode(fp,cfg.fibre.mode_radius_mas)) for u in unit_opds]
-    wave_eta.append(np.mean(samples))
+    wave_eta.append(sampled_power_fraction * np.mean(samples))
 for seeing in seeing_values:
     scale = (seeing/cfg.ao.reference_seeing_arcsec)**(5/6)
-    seeing_eta.append(np.mean([overlap_efficiency(propagate(pupil,u*150*scale,cfg.ao.wavelength_um,t.pad_factor).field,basis[0]) for u in unit_opds]))
-broadband = polychromatic_psf(pupil,case_opds[1],[1.54,1.555,1.57],pad_factor=t.pad_factor,axis_mas=reference.axis_mas)
+    samples = [overlap_efficiency(propagate(pupil,u*wfe_cases[1]*scale,cfg.ao.wavelength_um,t.pad_factor).field,basis[0]) for u in unit_opds]
+    seeing_eta.append(sampled_power_fraction * np.mean(samples))
+mixture_um = [cfg.spectrograph.wavelength_min_um, cfg.ao.wavelength_um, cfg.spectrograph.wavelength_max_um]
+broadband = polychromatic_psf(pupil,case_opds[1],mixture_um,pad_factor=t.pad_factor,axis_mas=reference.axis_mas)
 fig,axes=plt.subplots(1,3,figsize=(13,4),layout='constrained')
-axes[0].plot(wavelengths,wave_eta,'o-',label='150 nm WFE, fixed 57 mas radius')
+axes[0].plot(wavelengths,wave_eta,'o-',label=f'{wfe_cases[1]} nm WFE, fixed {cfg.fibre.mode_radius_mas:g} mas radius')
 axes[0].set(xlabel='Wavelength [µm]',ylabel='SMF coupling η',title='Chromatic injection'); axes[0].legend(fontsize=8)
-axes[1].plot(seeing_values,seeing_eta,'o-',label='150 nm at reference seeing')
+axes[1].plot(seeing_values,seeing_eta,'o-',label=f'{wfe_cases[1]} nm at reference seeing')
 axes[1].set(xlabel='Seeing at 500 nm [arcsec]',ylabel='SMF coupling η',title='Fixed AO attenuation'); axes[1].legend(fontsize=8)
 im=axes[2].imshow(broadband.intensity[np.ix_(crop,crop)]/reference.intensity.max(),origin='lower',extent=angular_extent,cmap='magma',norm=LogNorm(1e-5,1))
-axes[2].set(xlabel='Angle x [mas]',ylabel='Angle y [mas]',title='1.540 / 1.555 / 1.570 µm mixture'); axes[2].grid(False)
-fig.colorbar(im,ax=axes[2],label='Intensity / 1.555 µm reference peak',shrink=0.8)
+axes[2].set(xlabel='Angle x [mas]',ylabel='Angle y [mas]',title=' / '.join(f'{w:.3f}' for w in mixture_um)+' µm mixture'); axes[2].grid(False)
+fig.colorbar(im,ax=axes[2],label=f'Intensity / {cfg.ao.wavelength_um:.3f} µm reference peak',shrink=0.8)
 export(fig,'wavelength_seeing')
 print(f'Broadband captured fraction on the common finite grid: {broadband.intensity.sum():.8f}')
 ''')
@@ -308,7 +323,10 @@ from edge effects. The model also imports explicit one-dimensional ASCII/FITS te
 Poisson source, background and dark counts plus Gaussian read noise are generated
 in electrons. Expected background and dark are subtracted without removing their
 variance. The incident photon-rate density, continuum, and instrument response are
-known exactly in this synthetic example. SNR is **per detector pixel**.
+known exactly in this synthetic example. SNR is **per extracted spectral sample**:
+one detector-pixel-wide wavelength bin summed over the spatial extraction pixels of
+every read channel. It is not per physical detector pixel; the run's definition and
+pixel count are printed below and saved in the summary.
 ''')
 code('''
 baseline = run_simulation(cfg)
@@ -324,12 +342,14 @@ axes[0].plot(forward.highres_wavelength_um[highselect],forward.input_flux[highse
 axes[0].plot(forward.highres_wavelength_um[highselect],forward.convolved_flux[highselect],lw=2,label='Gaussian LSF')
 axes[0].plot(model.wavelength_um[select],forward.normalized_flux[select],'.',ms=3,label='Pixel-integrated noiseless spectrum')
 axes[0].plot(model.wavelength_um[select],(det.flux_e/det.continuum_e)[select],lw=0.8,alpha=0.7,label='Detector realization')
-axes[0].set(ylabel='Continuum-normalized flux',title=f'Synthetic absorption spectrum | R = {cfg.spectrograph.resolving_power:,.0f}, 3 pixels/FWHM, median SNR = {np.median(det.snr):.1f}')
+axes[0].set(ylabel='Continuum-normalized flux',title=f'Synthetic absorption spectrum | R = {cfg.spectrograph.resolving_power:,.0f}, {cfg.spectrograph.pixels_per_resolution_element:g} pixels/FWHM, median SNR per spectral sample = {np.median(det.snr):.1f}')
 axes[0].legend(ncol=2,fontsize=9)
 axes[1].plot(model.wavelength_um[select],((det.flux_e-det.expected_source_e)/np.sqrt(det.variance_e2))[select],lw=0.8,label='Noise residual / predicted σ')
 axes[1].axhline(0,color='black',lw=0.7);axes[1].set(xlabel='Wavelength [µm]',ylabel='Residual [σ]');axes[1].legend(fontsize=9)
 export(fig,'synthetic_observation')
-table([(key,f'{value:.4f}' if isinstance(value,float) else value) for key,value in summary.items() if key not in ['disclaimer','validation']],['Computed result','Value (units in key)'])
+display(Markdown(f'**SNR definition.** {summary["snr_definition"]}'))
+nested = ['disclaimer','validation','snr_definition','template','field_descriptions','spectrum_csv_columns']
+table([(key,f'{value:.4f}' if isinstance(value,float) else value) for key,value in summary.items() if key not in nested],['Computed result','Value (units in key)'])
 ''')
 md(r'''
 ## 8. RV injection and recovery
@@ -362,18 +382,19 @@ display(Markdown(f'Injected **{cfg.observation.injected_rv_m_s:.2f} m/s**; recov
 md('''
 ## 9. Coupling, brightness, and the detector cost of more ports
 
-For this narrow band the comparison below uses the 1.555 µm mean coupling as a
-constant approximation. Every port is read as an independent extraction channel;
-all channels have the same LSF and total source counts are conserved when summed.
-The six-mode direct fibre uses one extraction channel, an optimistic comparison
+For this narrow band the comparison below uses the mean coupling at the AO reference
+wavelength as a constant approximation. Every port is read as an independent extraction
+channel; all channels have the same LSF and total source counts are conserved when summed.
+A direct few-mode fibre would use one extraction channel, an optimistic comparison
 that omits mode-dependent line-shape changes. Close rankings remain subject to the finite optical ensemble and assumed mode basis.
-The faint case reduces incident
-photon rate by 100; it is an illustrative detector-noise sensitivity study.
+The faint case scales the incident photon rate by a fixed factor; it is an illustrative
+detector-noise sensitivity study.
 ''')
 code('''
 trade_rows=[]
 fig,axes=plt.subplots(1,2,figsize=(11,4.5),layout='constrained')
-for ax,brightness in zip(axes,[1.0,0.01]):
+brightness_scales = [1.0,0.01]
+for ax,brightness in zip(axes,brightness_scales):
     for iw in [0,2,5]:
         uncertainties=[]
         for n in ports:
@@ -384,12 +405,15 @@ for ax,brightness in zip(axes,[1.0,0.01]):
                                   throughput=cfg.spectrograph.throughput,n_channels=int(n),noisy=False)
             sigma = rv_uncertainty(model,cfg.observation.injected_rv_m_s,d.variance_e2,d.continuum_e)
             uncertainties.append(sigma)
+            snr = float(np.median(d.snr))
             trade_rows.append(dict(brightness_scale=brightness,wfe_nm=float(wfe_grid[iw]),ports=int(n),
-                                   coupling=float(eta),median_snr=float(np.median(d.snr)),rv_sigma_m_s=sigma))
+                                   coupling=float(eta),median_snr_per_spectral_sample=snr,
+                                   detector_pixels_per_spectral_sample=int(n)*cfg.detector.extraction_pixels,
+                                   median_snr=snr,rv_sigma_m_s=sigma))
         ax.plot(ports,uncertainties,'o-',label=f'{wfe_grid[iw]:.0f} nm WFE')
     ax.set(xlabel='Spatial channels (1 = SMF)',ylabel='Predicted RV uncertainty [m/s]',
            title=f'Incident photon rate × {brightness:g}',xticks=ports)
-    ax.legend(title='10 mas per-axis jitter',fontsize=9)
+    ax.legend(title=f'{jitter_grid[1]:g} mas per-axis jitter',fontsize=9)
 fig.suptitle('More accepted modes compete with more detector noise')
 export(fig,'rv_port_trade')
 _ = (RESULTS/'port_trade.json').write_text(json.dumps(trade_rows,indent=2)+'\\n')
@@ -406,18 +430,25 @@ reproducibility, and zero-noise/Monte Carlo RV recovery.
 code('''
 eta_good,eta_bad = eta_map[0,0],eta_map[-1,0]
 eta_center,eta_jitter = eta_map[2,0],eta_map[2,4]
-bright_rows = [r for r in trade_rows if r['brightness_scale']==1 and r['wfe_nm']==400]
-faint_rows = [r for r in trade_rows if r['brightness_scale']==0.01 and r['wfe_nm']==400]
+bright_rows = [r for r in trade_rows if r['brightness_scale']==brightness_scales[0] and r['wfe_nm']==wfe_grid[5]]
+faint_rows = [r for r in trade_rows if r['brightness_scale']==brightness_scales[1] and r['wfe_nm']==wfe_grid[5]]
 bright_smf,bright_pl = bright_rows[0],bright_rows[-1]
 faint_smf,faint_pl = faint_rows[0],faint_rows[-1]
 conclusions=[
- f'At zero jitter, increasing residual WFE from 0 to 500 nm changes mean SMF coupling from {eta_good:.3f} to {eta_bad:.3f}; wavefront quality sets the photon budget.',
- f'At 150 nm WFE, increasing per-axis jitter from 0 to 40 mas changes SMF coupling from {eta_center:.3f} to {eta_jitter:.3f}; injection stability remains important even at fixed AO residual.',
- f'At 400 nm WFE / 10 mas jitter, replacing the SMF with a 15-port lantern changes forecast σRV from {bright_smf["rv_sigma_m_s"]:.2f} to {bright_pl["rv_sigma_m_s"]:.2f} m/s at baseline brightness, but from {faint_smf["rv_sigma_m_s"]:.2f} to {faint_pl["rv_sigma_m_s"]:.2f} m/s at 1/100 brightness. Under the assumed insertion loss and extraction noise, detector costs can reverse the throughput advantage.'
+ f'At zero jitter, increasing residual WFE from {wfe_grid[0]:g} to {wfe_grid[-1]:g} nm changes mean SMF coupling from {eta_good:.3f} to {eta_bad:.3f}; wavefront quality sets the photon budget.',
+ f'At {wfe_grid[2]:g} nm WFE, increasing per-axis jitter from {jitter_grid[0]:g} to {jitter_grid[4]:g} mas changes SMF coupling from {eta_center:.3f} to {eta_jitter:.3f}; injection stability remains important even at fixed AO residual.',
+ f'At {wfe_grid[5]:g} nm WFE / {jitter_grid[1]:g} mas jitter, replacing the SMF with a {bright_pl["ports"]}-port lantern changes forecast σRV from {bright_smf["rv_sigma_m_s"]:.2f} to {bright_pl["rv_sigma_m_s"]:.2f} m/s at baseline brightness, but from {faint_smf["rv_sigma_m_s"]:.2f} to {faint_pl["rv_sigma_m_s"]:.2f} m/s at {brightness_scales[1]:g} × brightness. Under the assumed insertion loss and extraction noise, detector costs can reverse the throughput advantage.'
 ]
 display(Markdown('\\n\\n'.join(f'**{i+1}.** {c}' for i,c in enumerate(conclusions))))
 elapsed = time.perf_counter()-START
-metrics=dict(baseline=summary,conclusions=conclusions,strehl_cases=strehl_rows,
+# Labels in the generated documentation are derived from these two records.
+fixed_sweep_parameters=dict(wfe_cases_nm=wfe_cases,wfe_grid_nm=wfe_grid.tolist(),jitter_grid_mas=jitter_grid.tolist(),
+                            ports=ports.tolist(),sweep_frames=sweep_frames,brightness_scales=brightness_scales,
+                            wavelength_scan_um=wavelengths.tolist(),seeing_scan_arcsec=seeing_values.tolist(),
+                            mixture_um=mixture_um,phase_seed_range=[610,610+sweep_frames-1],pointing_seed=810,
+                            strehl_case_seed=401,outer_scale_m=cfg.ao.outer_scale_m)
+metrics=dict(baseline=summary,run_configuration=asdict(cfg),fixed_sweep_parameters=fixed_sweep_parameters,
+             conclusions=conclusions,strehl_cases=strehl_rows,
              sweep_frames=sweep_frames,maximum_coupling_sem=float(eta_sem.max()),
              wavelength_um=wavelengths.tolist(),wavelength_coupling=wave_eta,
              seeing_arcsec=seeing_values.tolist(),seeing_coupling=seeing_eta,
